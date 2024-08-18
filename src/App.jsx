@@ -9,7 +9,13 @@ function App() {
   const [input, setInput] = useState('')
 
   useEffect(() => {
+    console.log('Connecting to server...')
+    socket.on('connect', () => {
+      console.log('Connected to Server')
+    })
+
     socket.on('chat message', (msg) => {
+      console.log('Message received:', msg)
       setMesssages((prevMessages) => [...prevMessages, msg])
     })
 
@@ -28,9 +34,9 @@ function App() {
   return (
     <div>
       <ul>
-        {messages.map((msg, index) => {
+        {messages.map((msg, index) => (
           <li key={index}>{msg}</li>
-        })}
+        ))}
       </ul>
       <input
         value={input}
