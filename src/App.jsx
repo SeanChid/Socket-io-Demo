@@ -1,36 +1,43 @@
 import { useState, useEffect } from 'react'
-import socket from './socket.js'
+import { io } from 'socket.io-client'
 import './App.css'
 
+const socket = io('http://localhost:8000')
+
 function App() {
-  const [message, setMessage] = useState('')
-  const [receivedMessage, setReceivedMessage] = useState('')
+  const [messages, setMesssages] = useState([])
+  const [input, setInput] = useState('')
 
   useEffect(() => {
-    socket.on("message", (msg) => {
-      setReceivedMessage(msg)
+    socket.on('chat message', (msg) => {
+      setMesssages((prevMessages) => [...prevMessages, msg])
     })
 
     return () => {
-      socket.off("message")
+      socket.off('chat message')
     }
   }, [])
 
   const sendMessage = () => {
-    socket.emit("message", message)
-    setMessage("")
+    if (input) {
+      socket.emit('chat message', input)
+      setInput('')
+    }
   }
 
   return (
     <div>
+      <ul>
+        {messages.map((msg, index) => {
+          <li key={index}>{msg}</li>
+        })}
+      </ul>
       <input
-        type="text"
-        value={message}
-        onChange={(e) => setMessage(e.target.value)}
+        value={input}
+        onChange={(e) => setInput(e.target.value)}
         placeholder='Type a message'
       />
       <button onClick={sendMessage}>Send</button>
-      <p>Received: {receivedMessage}</p>
     </div>
   )
 }
