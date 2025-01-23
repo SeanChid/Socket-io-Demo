@@ -20,22 +20,45 @@ app.use(express.static('public'))
 app.use(express.urlencoded({extended: false}))
 
 io.on('connection', (socket) => {
-    console.log('a user connected')
+    console.log('User connected:', socket.id)
+    
+    socket.on('set username', (username) => {
+        socket.username = username
+        socket.emit('username set', username)
+        io.emit('user joined', { 
+            message: `${username} joined the chat`,
+            type: 'system'
+        })
+    })
 
     socket.on('chat message', (msg) => {
-        console.log('message' + msg)
-        io.emit('chat message', msg)
+        io.emit('chat message', {
+            userId: socket.id,
+            username: socket.username,
+            message: msg
+        })
+    })
+
+    socket.on('leave chat', (username) => {
+        io.emit('user left', {
+            message: `${username} left the chat`,
+            type: 'system'
+        })
     })
 
     socket.on('disconnect', () => {
-        console.log('user disconnected')
+        if (socket.username) {
+            io.emit('user left', {
+                message: `${socket.username} left the chat`,
+                type: 'system'
+            })
+        }
+        console.log('User disconnected:', socket.id)
     })
 })
 
-// ViteExpress.listen(httpServer, 8000, () => console.log('server is running on 8000'))
-
-httpServer.listen(8000, () => {
-    console.log('server is listening on 8000')
+httpServer.listen(3000, () => {
+    console.log('Server running on port 3000')
 })
 
 ViteExpress.bind(app, httpServer)
