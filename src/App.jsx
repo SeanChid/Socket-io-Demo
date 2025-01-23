@@ -11,6 +11,8 @@ function App() {
   const [username, setUsername] = useState('')
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [loginError, setLoginError] = useState('')
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef(null)
   const messagesEndRef = useRef(null)
 
   useEffect(() => {
@@ -71,8 +73,44 @@ function App() {
     }
   }
 
-  const onEmojiClick = (emojiObject) => {
-    setInputMessage(prevInput => prevInput + emojiObject.emoji)
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    const maxSize = 5 * 1024 * 1024 // 5MB
+    if (file.size > maxSize) {
+      alert('File size must be less than 5MB')
+      return
+    }
+
+    setIsUploading(true)
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      const response = await fetch('/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error('Upload failed')
+      }
+
+      const data = await response.json()
+      socket.emit('media message', {
+        url: data.url,
+        filename: data.filename,
+        type: data.type
+      })
+    } catch (error) {
+      alert('Error uploading file: ' + error.message)
+    } finally {
+      setIsUploading(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
   }
 
   const handleLeaveChat = () => {
@@ -87,6 +125,51 @@ function App() {
       const newSocket = io()
       setSocket(newSocket)
     }
+  }
+
+  const onEmojiClick = (emojiObject) => {
+    setInputMessage(prevInput => prevInput + emojiObject.emoji)
+  }
+
+  const renderMessage = (msg) => {
+    if (msg.type === 'system') {
+      return <p className="system-message">{msg.message}</p>
+    }
+
+    if (msg.isMedia) {
+      const isImage = msg.mediaType?.startsWith('image/')
+      return (
+        <>
+          <span className="user-id">{msg.username}</span>
+          <div className="media-container">
+            {isImage ? (
+              <img 
+                src={msg.mediaUrl} 
+                alt={msg.message} 
+                className="media-image"
+                onClick={() => window.open(msg.mediaUrl, '_blank')}
+              />
+            ) : (
+              <a 
+                href={msg.mediaUrl} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="media-file"
+              >
+                📎 {msg.message}
+              </a>
+            )}
+          </div>
+        </>
+      )
+    }
+
+    return (
+      <>
+        <span className="user-id">{msg.username}</span>
+        <p>{msg.message}</p>
+      </>
+    )
   }
 
   if (!isLoggedIn) {
@@ -132,14 +215,7 @@ function App() {
                   : 'received'
             }`}
           >
-            {msg.type === 'system' ? (
-              <p className="system-message">{msg.message}</p>
-            ) : (
-              <>
-                <span className="user-id">{msg.username}</span>
-                <p>{msg.message}</p>
-              </>
-            )}
+            {renderMessage(msg)}
           </div>
         ))}
         <div ref={messagesEndRef} />
@@ -164,6 +240,17 @@ function App() {
             onChange={(e) => setInputMessage(e.target.value)}
             placeholder="Type a message..."
           />
+          <label className="upload-button">
+            📎
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept="image/*,.pdf,.doc,.docx,.txt"
+              style={{ display: 'none' }}
+              disabled={isUploading}
+            />
+          </label>
           <button type="submit">Send</button>
         </form>
       </div>
