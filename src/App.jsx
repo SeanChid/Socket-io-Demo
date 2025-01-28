@@ -1,261 +1,210 @@
-import { useState, useEffect, useRef } from 'react'
-import io from 'socket.io-client'
-import EmojiPicker from 'emoji-picker-react'
+import { useState, useEffect } from 'react'
 import './App.css'
+import socket from './socket'
+import Auth from './components/Auth'
+import ChatRoom from './components/ChatRoom'
+import PrivateChat from './components/PrivateChat'
+import UserSearch from './components/UserSearch'
 
 function App() {
-  const [socket, setSocket] = useState(null)
-  const [messages, setMessages] = useState([])
-  const [inputMessage, setInputMessage] = useState('')
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
-  const [username, setUsername] = useState('')
-  const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [loginError, setLoginError] = useState('')
-  const [isUploading, setIsUploading] = useState(false)
-  const fileInputRef = useRef(null)
-  const messagesEndRef = useRef(null)
+    const [user, setUser] = useState(null);
+    const [rooms, setRooms] = useState([]);
+    const [privateChats, setPrivateChats] = useState([]);
+    const [activeRoom, setActiveRoom] = useState(null);
+    const [activePrivateChat, setActivePrivateChat] = useState(null);
+    const [showCreateRoom, setShowCreateRoom] = useState(false);
+    const [showFindUsers, setShowFindUsers] = useState(false);
+    const [newRoomName, setNewRoomName] = useState('');
+    const [error, setError] = useState('');
 
-  useEffect(() => {
-    const newSocket = io()
-    setSocket(newSocket)
+    useEffect(() => {
+        if (user) {
+            // Load rooms and private chats
+            loadRooms();
+            loadPrivateChats();
+        }
+    }, [user]);
 
-    newSocket.on('username set', (username) => {
-      setIsLoggedIn(true)
-    })
+    const loadRooms = async () => {
+        try {
+            const response = await fetch('/api/rooms');
+            if (!response.ok) throw new Error('Failed to load rooms');
+            const data = await response.json();
+            setRooms(data);
+        } catch (error) {
+            setError('Failed to load rooms');
+        }
+    };
 
-    newSocket.on('user joined', (data) => {
-      setMessages(prev => [...prev, data])
-    })
+    const loadPrivateChats = async () => {
+        try {
+            const response = await fetch('/api/private-chats');
+            if (!response.ok) throw new Error('Failed to load private chats');
+            const data = await response.json();
+            setPrivateChats(data);
+        } catch (error) {
+            setError('Failed to load private chats');
+        }
+    };
 
-    newSocket.on('user left', (data) => {
-      setMessages(prev => [...prev, data])
-    })
+    const handleCreateRoom = async (e) => {
+        e.preventDefault();
+        if (!newRoomName.trim()) return;
 
-    return () => newSocket.close()
-  }, [])
+        try {
+            const response = await fetch('/api/rooms', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: newRoomName.trim(),
+                    isPrivate: false
+                }),
+            });
 
-  useEffect(() => {
-    if (!socket) return
+            if (!response.ok) throw new Error('Failed to create room');
+            
+            setNewRoomName('');
+            setShowCreateRoom(false);
+            loadRooms();
+        } catch (error) {
+            setError('Failed to create room');
+        }
+    };
 
-    socket.on('chat message', (msg) => {
-      setMessages(prevMessages => [...prevMessages, msg])
-    })
+    const handleStartPrivateChat = async (selectedUser) => {
+        try {
+            const response = await fetch('/api/private-chats', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    userId: selectedUser.id
+                }),
+            });
 
-    return () => {
-      socket.off('chat message')
-    }
-  }, [socket])
+            if (!response.ok) throw new Error('Failed to start chat');
+            
+            setShowFindUsers(false);
+            loadPrivateChats();
+        } catch (error) {
+            setError('Failed to start private chat');
+        }
+    };
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    const handleLogout = async () => {
+        try {
+            await fetch('/api/logout', { method: 'POST' });
+            setUser(null);
+            setRooms([]);
+            setPrivateChats([]);
+            setActiveRoom(null);
+            setActivePrivateChat(null);
+        } catch (error) {
+            setError('Failed to logout');
+        }
+    };
 
-  const handleLogin = (e) => {
-    e.preventDefault()
-    if (!username.trim()) {
-      setLoginError('Please enter a username')
-      return
-    }
-    if (username.length < 3) {
-      setLoginError('Username must be at least 3 characters long')
-      return
-    }
-    socket.emit('set username', username.trim())
-    setLoginError('')
-  }
-
-  const handleSubmit = (e) => {
-    e.preventDefault()
-    if (inputMessage.trim() && socket) {
-      socket.emit('chat message', inputMessage)
-      setInputMessage('')
-      setShowEmojiPicker(false)
-    }
-  }
-
-  const handleFileUpload = async (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-
-    const maxSize = 5 * 1024 * 1024 // 5MB
-    if (file.size > maxSize) {
-      alert('File size must be less than 5MB')
-      return
-    }
-
-    setIsUploading(true)
-    const formData = new FormData()
-    formData.append('file', file)
-
-    try {
-      const response = await fetch('/upload', {
-        method: 'POST',
-        body: formData,
-      })
-
-      if (!response.ok) {
-        throw new Error('Upload failed')
-      }
-
-      const data = await response.json()
-      socket.emit('media message', {
-        url: data.url,
-        filename: data.filename,
-        type: data.type
-      })
-    } catch (error) {
-      alert('Error uploading file: ' + error.message)
-    } finally {
-      setIsUploading(false)
-      if (fileInputRef.current) {
-        fileInputRef.current.value = ''
-      }
-    }
-  }
-
-  const handleLeaveChat = () => {
-    if (socket) {
-      socket.emit('leave chat', username)
-      setIsLoggedIn(false)
-      setUsername('')
-      setMessages([])
-      socket.disconnect()
-      
-      // Reconnect with a new socket for future logins
-      const newSocket = io()
-      setSocket(newSocket)
-    }
-  }
-
-  const onEmojiClick = (emojiObject) => {
-    setInputMessage(prevInput => prevInput + emojiObject.emoji)
-  }
-
-  const renderMessage = (msg) => {
-    if (msg.type === 'system') {
-      return <p className="system-message">{msg.message}</p>
+    if (!user) {
+        return <Auth onAuthenticated={setUser} />;
     }
 
-    if (msg.isMedia) {
-      const isImage = msg.mediaType?.startsWith('image/')
-      return (
-        <>
-          <span className="user-id">{msg.username}</span>
-          <div className="media-container">
-            {isImage ? (
-              <img 
-                src={msg.mediaUrl} 
-                alt={msg.message} 
-                className="media-image"
-                onClick={() => window.open(msg.mediaUrl, '_blank')}
-              />
-            ) : (
-              <a 
-                href={msg.mediaUrl} 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="media-file"
-              >
-                📎 {msg.message}
-              </a>
-            )}
-          </div>
-        </>
-      )
+    if (activeRoom) {
+        return <ChatRoom room={activeRoom} onBack={() => setActiveRoom(null)} />;
+    }
+
+    if (activePrivateChat) {
+        return <PrivateChat chat={activePrivateChat} onBack={() => setActivePrivateChat(null)} />;
     }
 
     return (
-      <>
-        <span className="user-id">{msg.username}</span>
-        <p>{msg.message}</p>
-      </>
-    )
-  }
+        <div className="app-container">
+            <header className="app-header">
+                <h1>Chat App</h1>
+                <div className="user-controls">
+                    <span>Welcome, {user.username}!</span>
+                    <button onClick={handleLogout} className="logout-button">Logout</button>
+                </div>
+            </header>
 
-  if (!isLoggedIn) {
-    return (
-      <div className="login-container">
-        <div className="login-box">
-          <h2>Join the Chat</h2>
-          <form onSubmit={handleLogin}>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter your username"
-              className="login-input"
-            />
-            {loginError && <p className="error-message">{loginError}</p>}
-            <button type="submit" className="login-button">Join Chat</button>
-          </form>
-        </div>
-      </div>
-    )
-  }
+            {error && <div className="error-message">{error}</div>}
 
-  return (
-    <div className="chat-container">
-      <div className="chat-header">
-        <div className="header-content">
-          <h2>Welcome, {username}!</h2>
-          <button onClick={handleLeaveChat} className="leave-button">
-            Leave Chat
-          </button>
+            <div className="main-content">
+                <section className="rooms-section">
+                    <div className="section-header">
+                        <h2>Chat Rooms</h2>
+                        <button onClick={() => setShowCreateRoom(true)} className="create-button">
+                            Create Room
+                        </button>
+                    </div>
+
+                    {showCreateRoom && (
+                        <form onSubmit={handleCreateRoom} className="create-room-form">
+                            <input
+                                type="text"
+                                value={newRoomName}
+                                onChange={(e) => setNewRoomName(e.target.value)}
+                                placeholder="Room name"
+                                className="room-name-input"
+                            />
+                            <button type="submit" className="create-button">Create</button>
+                            <button
+                                type="button"
+                                onClick={() => setShowCreateRoom(false)}
+                                className="cancel-button"
+                            >
+                                Cancel
+                            </button>
+                        </form>
+                    )}
+
+                    <div className="rooms-list">
+                        {rooms.map((room) => (
+                            <div key={room.room_id} className="room-item" onClick={() => setActiveRoom(room)}>
+                                <span className="room-name">{room.name}</span>
+                                <span className="member-count">{room.members.length} members</span>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+
+                <section className="private-chats-section">
+                    <div className="section-header">
+                        <h2>Private Chats</h2>
+                        <button onClick={() => setShowFindUsers(true)} className="create-button">
+                            New Chat
+                        </button>
+                    </div>
+
+                    {showFindUsers && (
+                        <div className="find-users-modal">
+                            <UserSearch onSelectUser={handleStartPrivateChat} buttonText="Start Chat" />
+                            <button
+                                onClick={() => setShowFindUsers(false)}
+                                className="close-button"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    )}
+
+                    <div className="private-chats-list">
+                        {privateChats.map((chat) => (
+                            <div
+                                key={chat.chat_id}
+                                className="private-chat-item"
+                                onClick={() => setActivePrivateChat(chat)}
+                            >
+                                <span className="username">{chat.other_user.username}</span>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            </div>
         </div>
-      </div>
-      <div className="messages">
-        {messages.map((msg, index) => (
-          <div
-            key={index}
-            className={`message ${
-              msg.type === 'system' 
-                ? 'system' 
-                : msg.userId === socket?.id 
-                  ? 'sent' 
-                  : 'received'
-            }`}
-          >
-            {renderMessage(msg)}
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-      <div className="input-container">
-        {showEmojiPicker && (
-          <div className="emoji-picker-container">
-            <EmojiPicker onEmojiClick={onEmojiClick} />
-          </div>
-        )}
-        <form onSubmit={handleSubmit} className="input-form">
-          <button
-            type="button"
-            className="emoji-button"
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-          >
-            😊
-          </button>
-          <input
-            type="text"
-            value={inputMessage}
-            onChange={(e) => setInputMessage(e.target.value)}
-            placeholder="Type a message..."
-          />
-          <label className="upload-button">
-            📎
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileUpload}
-              accept="image/*,.pdf,.doc,.docx,.txt"
-              style={{ display: 'none' }}
-              disabled={isUploading}
-            />
-          </label>
-          <button type="submit">Send</button>
-        </form>
-      </div>
-    </div>
-  )
+    );
 }
 
-export default App
+export default App;

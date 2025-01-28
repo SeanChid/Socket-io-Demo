@@ -7,6 +7,7 @@ import multer from 'multer'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
+import { queries } from './db/queries.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
@@ -15,49 +16,188 @@ const app = express()
 const httpServer = createServer(app)
 const io = new Server(httpServer)
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        cb(null, path.join(__dirname, '../public/uploads'))
-    },
-    filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
-        cb(null, uniqueSuffix + path.extname(file.originalname))
-    }
-})
+// Middleware
+app.use(express.json())
 
-const upload = multer({
-    storage: storage,
-    limits: {
-        fileSize: 5 * 1024 * 1024 // 5MB limit
-    },
-    fileFilter: function (req, file, cb) {
-        // Accept images and common file types
-        const filetypes = /jpeg|jpg|png|gif|pdf|doc|docx|txt/
-        const extname = filetypes.test(path.extname(file.originalname).toLowerCase())
-        const mimetype = filetypes.test(file.mimetype)
-
-        if (extname && mimetype) {
-            return cb(null, true)
-        } else {
-            cb('Error: Only images and common document types are allowed!')
-        }
-    }
-}).single('file')
-
-app.use(session({
+// Create session middleware
+const sessionMiddleware = session({
     secret: 'superBeans',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false }
-}))
+    cookie: {
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 24 * 60 * 60 * 1000 // 24 hours
+    }
+});
 
-app.use(express.json())
-app.use(express.static('public'))
-app.use(express.urlencoded({extended: false}))
+// Use session middleware
+app.use(sessionMiddleware);
+
+// Auth middleware
+const requireAuth = (req, res, next) => {
+    if (!req.session.user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    next();
+};
+
+// User routes
+app.post('/api/register', async (req, res) => {
+    try {
+        const { username, password, email } = req.body;
+        if (!username || !password || !email) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+        const user = await queries.createUser(username, password, email);
+        req.session.user = user;
+        res.json(user);
+    } catch (error) {
+        res.status(400).json({ error: 'Username or email already taken' });
+    }
+});
+
+app.post('/api/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        const user = await queries.authenticateUser(username, password);
+        if (!user) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+        req.session.user = user;
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.post('/api/logout', (req, res) => {
+    req.session.destroy();
+    res.json({ message: 'Logged out successfully' });
+});
+
+app.get('/api/users/search', requireAuth, async (req, res) => {
+    try {
+        const { query } = req.query;
+        const users = await queries.findUsers(query);
+        res.json(users);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Chat room routes
+app.post('/api/rooms', requireAuth, async (req, res) => {
+    try {
+        const { name, isPrivate } = req.body;
+        const roomId = await queries.createChatRoom(name, req.session.user.id, isPrivate);
+        res.json({ id: roomId });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.get('/api/rooms', requireAuth, async (req, res) => {
+    try {
+        const rooms = await queries.getUserRooms(req.session.user.id);
+        res.json(rooms);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.get('/api/rooms/:id/messages', requireAuth, async (req, res) => {
+    try {
+        const messages = await queries.getRoomMessages(req.params.id);
+        res.json(messages);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Private chat routes
+app.post('/api/private-chats', requireAuth, async (req, res) => {
+    try {
+        const { userId } = req.body;
+        const chatId = await queries.createPrivateChat(req.session.user.id, userId);
+        res.json({ id: chatId });
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.get('/api/private-chats', requireAuth, async (req, res) => {
+    try {
+        const chats = await queries.getUserPrivateChats(req.session.user.id);
+        res.json(chats);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.get('/api/private-chats/:id/messages', requireAuth, async (req, res) => {
+    try {
+        const messages = await queries.getPrivateChatMessages(req.params.id);
+        res.json(messages);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Room invite routes
+app.post('/api/rooms/:id/invites', requireAuth, async (req, res) => {
+    try {
+        const { userId } = req.body;
+        const invite = await queries.inviteToRoom(req.params.id, req.session.user.id, userId);
+        res.json(invite);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+app.post('/api/invites/:id/respond', requireAuth, async (req, res) => {
+    try {
+        const { status } = req.body;
+        if (!['accepted', 'rejected'].includes(status)) {
+            return res.status(400).json({ error: 'Invalid status' });
+        }
+        const invite = await queries.respondToInvite(req.params.id, status);
+        res.json(invite);
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
 
 // File upload endpoint
 app.post('/upload', (req, res) => {
+    const storage = multer.diskStorage({
+        destination: function (req, file, cb) {
+            cb(null, path.join(__dirname, '../public/uploads'))
+        },
+        filename: function (req, file, cb) {
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
+            cb(null, uniqueSuffix + path.extname(file.originalname))
+        }
+    })
+
+    const upload = multer({
+        storage: storage,
+        limits: {
+            fileSize: 5 * 1024 * 1024 // 5MB limit
+        },
+        fileFilter: function (req, file, cb) {
+            // Accept images and common file types
+            const filetypes = /jpeg|jpg|png|gif|pdf|doc|docx|txt/
+            const extname = filetypes.test(path.extname(file.originalname).toLowerCase())
+            const mimetype = filetypes.test(file.mimetype)
+
+            if (extname && mimetype) {
+                return cb(null, true)
+            } else {
+                cb('Error: Only images and common document types are allowed!')
+            }
+        }
+    }).single('file')
+
     upload(req, res, function (err) {
         if (err) {
             return res.status(400).json({ error: err.message })
@@ -75,57 +215,120 @@ app.post('/upload', (req, res) => {
     })
 })
 
+app.use(express.static('public'))
+app.use(express.urlencoded({extended: false}))
+
+// Socket.IO configuration with session and auth middleware
+io.engine.use(sessionMiddleware);
+
+// Add authentication middleware for Socket.IO
+io.use((socket, next) => {
+    const session = socket.request.session;
+    if (session && session.user) {
+        socket.user = session.user;
+        next();
+    } else {
+        next(new Error('Unauthorized'));
+    }
+});
+
+// Socket.IO handling
 io.on('connection', (socket) => {
-    console.log('User connected:', socket.id)
-    
-    socket.on('set username', (username) => {
-        socket.username = username
-        socket.emit('username set', username)
-        io.emit('user joined', { 
-            message: `${username} joined the chat`,
-            type: 'system'
-        })
-    })
+    console.log('User connected:', socket.user.username);
 
-    socket.on('chat message', (msg) => {
-        io.emit('chat message', {
-            userId: socket.id,
-            username: socket.username,
-            message: msg
-        })
-    })
+    // Notify others in user's rooms that they're online
+    socket.broadcast.emit('user-online', { userId: socket.user.id, username: socket.user.username });
 
-    socket.on('media message', (data) => {
-        io.emit('chat message', {
-            userId: socket.id,
-            username: socket.username,
-            message: data.filename,
-            mediaUrl: data.url,
-            mediaType: data.type,
-            isMedia: true
-        })
-    })
+    // Join room
+    socket.on('join-room', async (roomId) => {
+        try {
+            // Verify room membership
+            const isMember = await queries.isUserInRoom(socket.user.id, roomId);
+            if (!isMember) {
+                socket.emit('error', { message: 'Not a member of this room' });
+                return;
+            }
+            socket.join(`room:${roomId}`);
+            socket.to(`room:${roomId}`).emit('user-joined', { 
+                userId: socket.user.id, 
+                username: socket.user.username 
+            });
+        } catch (error) {
+            socket.emit('error', { message: 'Failed to join room' });
+        }
+    });
 
-    socket.on('leave chat', (username) => {
-        io.emit('user left', {
-            message: `${username} left the chat`,
-            type: 'system'
-        })
-    })
+    // Leave room
+    socket.on('leave-room', (roomId) => {
+        socket.leave(`room:${roomId}`);
+        socket.to(`room:${roomId}`).emit('user-left', { 
+            userId: socket.user.id, 
+            username: socket.user.username 
+        });
+    });
+
+    // Join private chat
+    socket.on('join-private-chat', async (chatId) => {
+        try {
+            // Verify chat membership
+            const isMember = await queries.isUserInPrivateChat(socket.user.id, chatId);
+            if (!isMember) {
+                socket.emit('error', { message: 'Not a member of this chat' });
+                return;
+            }
+            socket.join(`private:${chatId}`);
+        } catch (error) {
+            socket.emit('error', { message: 'Failed to join private chat' });
+        }
+    });
+
+    // Leave private chat
+    socket.on('leave-private-chat', (chatId) => {
+        socket.leave(`private:${chatId}`);
+    });
+
+    // Send message to room
+    socket.on('send-room-message', async ({ roomId, content }) => {
+        try {
+            if (!socket.user) {
+                socket.emit('error', { message: 'Unauthorized' });
+                return;
+            }
+            const message = await queries.addMessage(content, socket.user.id, roomId);
+            io.to(`room:${roomId}`).emit('new-message', message);
+        } catch (error) {
+            console.error('Error sending room message:', error);
+            socket.emit('error', { message: 'Failed to send message' });
+        }
+    });
+
+    // Send private message
+    socket.on('send-private-message', async ({ chatId, content }) => {
+        try {
+            if (!socket.user) {
+                socket.emit('error', { message: 'Unauthorized' });
+                return;
+            }
+            const message = await queries.addMessage(content, socket.user.id, null, chatId);
+            io.to(`private:${chatId}`).emit('new-message', message);
+        } catch (error) {
+            console.error('Error sending private message:', error);
+            socket.emit('error', { message: 'Failed to send message' });
+        }
+    });
 
     socket.on('disconnect', () => {
-        if (socket.username) {
-            io.emit('user left', {
-                message: `${socket.username} left the chat`,
-                type: 'system'
-            })
-        }
-        console.log('User disconnected:', socket.id)
-    })
-})
+        console.log('User disconnected:', socket.user.username);
+        // Notify others that user is offline
+        socket.broadcast.emit('user-offline', { 
+            userId: socket.user.id, 
+            username: socket.user.username 
+        });
+    });
+});
 
 httpServer.listen(3000, () => {
-    console.log('Server running on port 3000')
-})
+    console.log('Server running on port 3000');
+});
 
 ViteExpress.bind(app, httpServer)
