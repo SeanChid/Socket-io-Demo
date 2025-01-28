@@ -28,7 +28,7 @@ export const queries = {
 
     async findUsers(searchTerm) {
         const result = await pool.query(
-            'SELECT user_id as id, username, avatar_url FROM users WHERE username ILIKE $1',
+            'SELECT user_id as id, username, COALESCE(avatar_url, \'\') as avatar_url FROM users WHERE username ILIKE $1',
             [`%${searchTerm}%`]
         );
         return result.rows;
@@ -65,7 +65,11 @@ export const queries = {
     async getUserRooms(userId) {
         const result = await pool.query(`
             SELECT r.room_id, r.name, r.is_private, r.created_at,
-                   array_agg(json_build_object('id', u.user_id, 'username', u.username, 'avatar_url', u.avatar_url)) as members
+                   array_agg(json_build_object(
+                       'id', u.user_id, 
+                       'username', u.username, 
+                       'avatar_url', COALESCE(u.avatar_url, '')
+                   )) as members
             FROM chat_rooms r
             JOIN user_rooms ur ON r.room_id = ur.room_id
             JOIN users u ON ur.user_id = u.user_id
@@ -73,6 +77,7 @@ export const queries = {
                 SELECT room_id FROM user_rooms WHERE user_id = $1
             )
             GROUP BY r.room_id, r.name, r.is_private, r.created_at
+            ORDER BY r.created_at DESC
         `, [userId]);
         return result.rows;
     },
@@ -91,13 +96,22 @@ export const queries = {
                 pc.chat_id,
                 pc.created_at,
                 CASE 
-                    WHEN pc.user1_id = $1 THEN json_build_object('id', u2.user_id, 'username', u2.username, 'avatar_url', u2.avatar_url)
-                    ELSE json_build_object('id', u1.user_id, 'username', u1.username, 'avatar_url', u1.avatar_url)
+                    WHEN pc.user1_id = $1 THEN json_build_object(
+                        'id', u2.user_id, 
+                        'username', u2.username, 
+                        'avatar_url', COALESCE(u2.avatar_url, '')
+                    )
+                    ELSE json_build_object(
+                        'id', u1.user_id, 
+                        'username', u1.username, 
+                        'avatar_url', COALESCE(u1.avatar_url, '')
+                    )
                 END as other_user
             FROM private_chats pc
             JOIN users u1 ON pc.user1_id = u1.user_id
             JOIN users u2 ON pc.user2_id = u2.user_id
             WHERE pc.user1_id = $1 OR pc.user2_id = $1
+            ORDER BY pc.created_at DESC
         `, [userId]);
         return result.rows;
     },

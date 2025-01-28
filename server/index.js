@@ -26,8 +26,11 @@ const sessionMiddleware = session({
     saveUninitialized: false,
     cookie: {
         secure: process.env.NODE_ENV === 'production',
-        maxAge: 24 * 60 * 60 * 1000 // 24 hours
-    }
+        maxAge: 24 * 60 * 60 * 1000, // 24 hours
+        httpOnly: true,
+        sameSite: 'lax'
+    },
+    name: 'sessionId' // Change cookie name from connect.sid
 });
 
 // Use session middleware
@@ -49,9 +52,28 @@ app.post('/api/register', async (req, res) => {
             return res.status(400).json({ error: 'Missing required fields' });
         }
         const user = await queries.createUser(username, password, email);
-        req.session.user = user;
-        res.json(user);
+        
+        // Set user in session with consistent property names
+        req.session.user = {
+            id: user.user_id,
+            username: user.username,
+            email: user.email
+        };
+        
+        // Save session explicitly
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session save error:', err);
+                return res.status(500).json({ error: 'Failed to create session' });
+            }
+            res.json({ 
+                id: user.user_id,
+                username: user.username,
+                email: user.email
+            });
+        });
     } catch (error) {
+        console.error('Registration error:', error);
         res.status(400).json({ error: 'Username or email already taken' });
     }
 });
@@ -63,25 +85,61 @@ app.post('/api/login', async (req, res) => {
         if (!user) {
             return res.status(401).json({ error: 'Invalid credentials' });
         }
-        req.session.user = user;
-        res.json(user);
+        
+        // Set user in session with consistent property names
+        req.session.user = {
+            id: user.id,
+            username: user.username
+        };
+        
+        // Save session explicitly
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session save error:', err);
+                return res.status(500).json({ error: 'Failed to create session' });
+            }
+            res.json({ 
+                id: user.id,
+                username: user.username
+            });
+        });
     } catch (error) {
+        console.error('Login error:', error);
         res.status(500).json({ error: 'Server error' });
     }
 });
 
 app.post('/api/logout', (req, res) => {
-    req.session.destroy();
-    res.json({ message: 'Logged out successfully' });
+    if (req.session) {
+        const username = req.session.user?.username;
+        req.session.destroy((err) => {
+            if (err) {
+                console.error('Logout error:', err);
+                return res.status(500).json({ error: 'Failed to logout' });
+            }
+            if (username) {
+                // Notify other users about logout
+                io.emit('user-offline', { username });
+            }
+            res.clearCookie('sessionId');
+            res.json({ message: 'Logged out successfully' });
+        });
+    } else {
+        res.json({ message: 'Already logged out' });
+    }
 });
 
-app.get('/api/users/search', requireAuth, async (req, res) => {
-    try {
-        const { query } = req.query;
-        const users = await queries.findUsers(query);
-        res.json(users);
-    } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+app.get('/api/session', (req, res) => {
+    if (req.session && req.session.user) {
+        res.json({ 
+            authenticated: true, 
+            user: {
+                id: req.session.user.id,
+                username: req.session.user.username
+            }
+        });
+    } else {
+        res.json({ authenticated: false });
     }
 });
 
@@ -89,10 +147,18 @@ app.get('/api/users/search', requireAuth, async (req, res) => {
 app.post('/api/rooms', requireAuth, async (req, res) => {
     try {
         const { name, isPrivate } = req.body;
-        const roomId = await queries.createChatRoom(name, req.session.user.id, isPrivate);
-        res.json({ id: roomId });
+        if (!name || name.trim().length === 0) {
+            return res.status(400).json({ error: 'Room name is required' });
+        }
+        
+        const roomId = await queries.createChatRoom(name.trim(), req.session.user.id, isPrivate);
+        const room = await queries.getUserRooms(req.session.user.id);
+        const newRoom = room.find(r => r.room_id === roomId);
+        
+        res.json(newRoom);
     } catch (error) {
-        res.status(500).json({ error: 'Server error' });
+        console.error('Create room error:', error);
+        res.status(500).json({ error: 'Failed to create room' });
     }
 });
 

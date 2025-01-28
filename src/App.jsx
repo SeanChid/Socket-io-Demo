@@ -5,9 +5,15 @@ import Auth from './components/Auth'
 import ChatRoom from './components/ChatRoom'
 import PrivateChat from './components/PrivateChat'
 import UserSearch from './components/UserSearch'
+import Header from './components/Header'
+import RoomList from './components/RoomList'
+import PrivateChatList from './components/PrivateChatList'
+import LoadingSpinner from './components/LoadingSpinner'
+import ErrorMessage from './components/ErrorMessage'
 
 function App() {
     const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
     const [rooms, setRooms] = useState([]);
     const [privateChats, setPrivateChats] = useState([]);
     const [activeRoom, setActiveRoom] = useState(null);
@@ -18,79 +24,61 @@ function App() {
     const [error, setError] = useState('');
 
     useEffect(() => {
+        checkSession();
+    }, []);
+
+    useEffect(() => {
         if (user) {
-            // Load rooms and private chats
             loadRooms();
             loadPrivateChats();
+            setupSocketListeners();
+        } else {
+            socket.disconnect();
         }
+
+        return () => {
+            socket.off('connect');
+            socket.off('connect_error');
+            socket.off('user-online');
+            socket.off('user-offline');
+        };
     }, [user]);
 
-    const loadRooms = async () => {
+    const setupSocketListeners = () => {
+        socket.connect();
+        
+        socket.on('connect', () => {
+            console.log('Socket connected');
+        });
+
+        socket.on('connect_error', (error) => {
+            if (error.message === 'Unauthorized') {
+                setUser(null);
+                socket.disconnect();
+            }
+        });
+
+        socket.on('user-online', ({ username }) => {
+            console.log(`${username} is online`);
+        });
+
+        socket.on('user-offline', ({ username }) => {
+            console.log(`${username} is offline`);
+        });
+    };
+
+    const checkSession = async () => {
         try {
-            const response = await fetch('/api/rooms');
-            if (!response.ok) throw new Error('Failed to load rooms');
+            const response = await fetch('/api/session');
             const data = await response.json();
-            setRooms(data);
-        } catch (error) {
-            setError('Failed to load rooms');
-        }
-    };
-
-    const loadPrivateChats = async () => {
-        try {
-            const response = await fetch('/api/private-chats');
-            if (!response.ok) throw new Error('Failed to load private chats');
-            const data = await response.json();
-            setPrivateChats(data);
-        } catch (error) {
-            setError('Failed to load private chats');
-        }
-    };
-
-    const handleCreateRoom = async (e) => {
-        e.preventDefault();
-        if (!newRoomName.trim()) return;
-
-        try {
-            const response = await fetch('/api/rooms', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    name: newRoomName.trim(),
-                    isPrivate: false
-                }),
-            });
-
-            if (!response.ok) throw new Error('Failed to create room');
             
-            setNewRoomName('');
-            setShowCreateRoom(false);
-            loadRooms();
+            if (data.authenticated) {
+                setUser(data.user);
+            }
         } catch (error) {
-            setError('Failed to create room');
-        }
-    };
-
-    const handleStartPrivateChat = async (selectedUser) => {
-        try {
-            const response = await fetch('/api/private-chats', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    userId: selectedUser.id
-                }),
-            });
-
-            if (!response.ok) throw new Error('Failed to start chat');
-            
-            setShowFindUsers(false);
-            loadPrivateChats();
-        } catch (error) {
-            setError('Failed to start private chat');
+            console.error('Session check failed:', error);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -102,107 +90,169 @@ function App() {
             setPrivateChats([]);
             setActiveRoom(null);
             setActivePrivateChat(null);
+            socket.disconnect();
         } catch (error) {
             setError('Failed to logout');
         }
     };
 
+    const loadRooms = async () => {
+        try {
+            const response = await fetch('/api/rooms');
+            if (!response.ok) {
+                if (response.status === 401) {
+                    setUser(null);
+                    return;
+                }
+                throw new Error('Failed to load rooms');
+            }
+            const data = await response.json();
+            setRooms(data);
+        } catch (error) {
+            setError('Failed to load rooms');
+        }
+    };
+
+    const loadPrivateChats = async () => {
+        try {
+            const response = await fetch('/api/private-chats');
+            if (!response.ok) {
+                if (response.status === 401) {
+                    setUser(null);
+                    return;
+                }
+                throw new Error('Failed to load private chats');
+            }
+            const data = await response.json();
+            setPrivateChats(data);
+        } catch (error) {
+            setError('Failed to load private chats');
+        }
+    };
+
+    const handleCreateRoom = async (roomName) => {
+        try {
+            const response = await fetch('/api/rooms', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    name: roomName,
+                    isPrivate: false,
+                }),
+                credentials: 'include' // Add this to include session cookie
+            });
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    setUser(null);
+                    return;
+                }
+                const data = await response.json();
+                throw new Error(data.error || 'Failed to create room');
+            }
+            
+            setNewRoomName('');
+            setShowCreateRoom(false);
+            await loadRooms(); // Wait for rooms to load
+        } catch (error) {
+            setError(error.message || 'Failed to create room');
+        }
+    };
+
+    const handleStartPrivateChat = async (userId) => {
+        try {
+            const response = await fetch('/api/private-chats', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    userId,
+                }),
+            });
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    setUser(null);
+                    return;
+                }
+                throw new Error('Failed to start chat');
+            }
+            
+            setShowFindUsers(false);
+            loadPrivateChats();
+        } catch (error) {
+            setError('Failed to start private chat');
+        }
+    };
+
+    if (loading) {
+        return <LoadingSpinner />;
+    }
+
     if (!user) {
-        return <Auth onAuthenticated={setUser} />;
+        return <Auth onAuth={setUser} />;
     }
 
     if (activeRoom) {
-        return <ChatRoom room={activeRoom} onBack={() => setActiveRoom(null)} />;
+        return (
+            <ChatRoom
+                room={activeRoom}
+                onBack={() => setActiveRoom(null)}
+                userId={user.id}
+            />
+        );
     }
 
     if (activePrivateChat) {
-        return <PrivateChat chat={activePrivateChat} onBack={() => setActivePrivateChat(null)} />;
+        return (
+            <PrivateChat
+                chat={activePrivateChat}
+                onBack={() => setActivePrivateChat(null)}
+                userId={user.id}
+            />
+        );
     }
 
     return (
         <div className="app-container">
-            <header className="app-header">
-                <h1>Chat App</h1>
-                <div className="user-controls">
-                    <span>Welcome, {user.username}!</span>
-                    <button onClick={handleLogout} className="logout-button">Logout</button>
-                </div>
-            </header>
-
-            {error && <div className="error-message">{error}</div>}
+            <Header 
+                username={user.username} 
+                onLogout={handleLogout} 
+            />
+            
+            <ErrorMessage 
+                message={error} 
+                onDismiss={() => setError('')} 
+            />
 
             <div className="main-content">
-                <section className="rooms-section">
-                    <div className="section-header">
-                        <h2>Chat Rooms</h2>
-                        <button onClick={() => setShowCreateRoom(true)} className="create-button">
-                            Create Room
-                        </button>
-                    </div>
+                <RoomList
+                    rooms={rooms}
+                    onRoomSelect={setActiveRoom}
+                    onCreateRoom={handleCreateRoom}
+                    showCreateRoom={showCreateRoom}
+                    newRoomName={newRoomName}
+                    setNewRoomName={setNewRoomName}
+                    setShowCreateRoom={setShowCreateRoom}
+                />
 
-                    {showCreateRoom && (
-                        <form onSubmit={handleCreateRoom} className="create-room-form">
-                            <input
-                                type="text"
-                                value={newRoomName}
-                                onChange={(e) => setNewRoomName(e.target.value)}
-                                placeholder="Room name"
-                                className="room-name-input"
-                            />
-                            <button type="submit" className="create-button">Create</button>
-                            <button
-                                type="button"
-                                onClick={() => setShowCreateRoom(false)}
-                                className="cancel-button"
-                            >
-                                Cancel
-                            </button>
-                        </form>
-                    )}
-
-                    <div className="rooms-list">
-                        {rooms.map((room) => (
-                            <div key={room.room_id} className="room-item" onClick={() => setActiveRoom(room)}>
-                                <span className="room-name">{room.name}</span>
-                                <span className="member-count">{room.members.length} members</span>
-                            </div>
-                        ))}
-                    </div>
-                </section>
-
-                <section className="private-chats-section">
-                    <div className="section-header">
-                        <h2>Private Chats</h2>
-                        <button onClick={() => setShowFindUsers(true)} className="create-button">
-                            New Chat
-                        </button>
-                    </div>
-
-                    {showFindUsers && (
-                        <div className="find-users-modal">
-                            <UserSearch onSelectUser={handleStartPrivateChat} buttonText="Start Chat" />
-                            <button
-                                onClick={() => setShowFindUsers(false)}
-                                className="close-button"
-                            >
-                                Close
-                            </button>
-                        </div>
-                    )}
-
-                    <div className="private-chats-list">
-                        {privateChats.map((chat) => (
-                            <div
-                                key={chat.chat_id}
-                                className="private-chat-item"
-                                onClick={() => setActivePrivateChat(chat)}
-                            >
-                                <span className="username">{chat.other_user.username}</span>
-                            </div>
-                        ))}
-                    </div>
-                </section>
+                <PrivateChatList
+                    privateChats={privateChats}
+                    onChatSelect={setActivePrivateChat}
+                    onFindUsers={setShowFindUsers}
+                    showFindUsers={showFindUsers}
+                />
             </div>
+
+            {showFindUsers && (
+                <UserSearch
+                    onStartChat={handleStartPrivateChat}
+                    onClose={() => setShowFindUsers(false)}
+                />
+            )}
         </div>
     );
 }
