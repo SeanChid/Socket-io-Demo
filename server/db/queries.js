@@ -1,29 +1,29 @@
 import pool from './config.js';
 import bcrypt from 'bcrypt';
 
-export const queries = {
+const queries = {
     // User operations
     async createUser(username, password, email) {
         const hashedPassword = await bcrypt.hash(password, 10);
         const result = await pool.query(
-            'INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING user_id, username',
-            [username, email, hashedPassword]
+            'INSERT INTO users (username, password_hash, email) VALUES ($1, $2, $3) RETURNING user_id, username, email',
+            [username, hashedPassword, email]
         );
         return result.rows[0];
     },
 
-    async authenticateUser(username, password) {
+    async verifyUser(username, password) {
         const result = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
         const user = result.rows[0];
         if (!user) return null;
         
         const validPassword = await bcrypt.compare(password, user.password_hash);
         if (!validPassword) return null;
-        
-        // Update last login
-        await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = $1', [user.user_id]);
-        
-        return { id: user.user_id, username: user.username };
+
+        return {
+            id: user.user_id,
+            username: user.username
+        };
     },
 
     async findUsers(searchTerm) {
@@ -39,7 +39,6 @@ export const queries = {
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
-            
             const roomResult = await client.query(
                 'INSERT INTO chat_rooms (name, created_by, is_private) VALUES ($1, $2, $3) RETURNING room_id',
                 [name, createdBy, isPrivate]
@@ -300,5 +299,7 @@ export const queries = {
             [userId]
         );
         return result.rows[0]?.last_login || null;
-    },
+    }
 };
+
+export default queries;

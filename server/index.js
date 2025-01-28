@@ -6,6 +6,7 @@ import { Server } from 'socket.io'
 import multer from 'multer'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import cors from 'cors'
 
 // Import routes
 import authRoutes from './routes/auth.js'
@@ -20,17 +21,18 @@ const __dirname = path.dirname(__filename)
 
 const app = express()
 const httpServer = createServer(app)
-const io = new Server(httpServer, {
-    cors: {
-        origin: "http://localhost:3000",
-        methods: ["GET", "POST"],
-        credentials: true
-    }
-})
+
+// Enable CORS with credentials
+app.use(cors({
+    origin: 'http://localhost:5173',
+    credentials: true
+}))
 
 // Middleware
 app.use(express.json())
-app.use(session({
+
+// Create session middleware
+const sessionMiddleware = session({
     name: 'sessionId',
     secret: 'your-secret-key',
     resave: false,
@@ -39,9 +41,26 @@ app.use(session({
         secure: process.env.NODE_ENV === 'production',
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: 'lax'
+        sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax'
     }
-}))
+})
+
+// Use session middleware
+app.use(sessionMiddleware)
+
+// Configure Socket.IO
+const io = new Server(httpServer, {
+    cors: {
+        origin: "http://localhost:5173",
+        methods: ["GET", "POST"],
+        credentials: true
+    }
+})
+
+// Share session middleware with Socket.IO
+io.engine.use((req, res, next) => {
+    sessionMiddleware(req, res, next)
+})
 
 // File upload configuration
 const storage = multer.diskStorage({

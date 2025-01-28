@@ -7,15 +7,26 @@ export default function(app, io) {
             if (!username || !password || !email) {
                 return res.status(400).json({ error: 'All fields are required' });
             }
-            const userId = await queries.createUser(username, password, email);
-            req.session.user = { id: userId, username };
+            const user = await queries.createUser(username, password, email);
+            
+            // Set session data
+            req.session.user = { 
+                id: user.user_id, 
+                username: user.username 
+            };
+            
+            // Save session explicitly
             await new Promise((resolve, reject) => {
                 req.session.save((err) => {
                     if (err) reject(err);
                     else resolve();
                 });
             });
-            res.json({ id: userId, username });
+
+            res.json({ 
+                id: user.user_id, 
+                username: user.username 
+            });
         } catch (error) {
             if (error.code === '23505') { // Unique violation in PostgreSQL
                 res.status(400).json({ error: 'Username or email already exists' });
@@ -34,7 +45,13 @@ export default function(app, io) {
                 return res.status(401).json({ error: 'Invalid credentials' });
             }
 
-            req.session.user = { id: user.id, username: user.username };
+            // Set session data
+            req.session.user = { 
+                id: user.id, 
+                username: user.username 
+            };
+            
+            // Save session explicitly
             await new Promise((resolve, reject) => {
                 req.session.save((err) => {
                     if (err) reject(err);
@@ -43,7 +60,10 @@ export default function(app, io) {
             });
 
             // Notify other users about login
-            io.emit('user-online', { username });
+            io.emit('user-online', { 
+                userId: user.id, 
+                username: user.username 
+            });
 
             res.json({ 
                 id: user.id,
@@ -56,16 +76,19 @@ export default function(app, io) {
     });
 
     app.post('/api/logout', (req, res) => {
-        if (req.session) {
-            const username = req.session.user?.username;
+        const user = req.session.user;
+        
+        if (user) {
+            // Notify other users about logout
+            io.emit('user-offline', { 
+                userId: user.id, 
+                username: user.username 
+            });
+            
             req.session.destroy((err) => {
                 if (err) {
                     console.error('Logout error:', err);
                     return res.status(500).json({ error: 'Failed to logout' });
-                }
-                if (username) {
-                    // Notify other users about logout
-                    io.emit('user-offline', { username });
                 }
                 res.clearCookie('sessionId');
                 res.json({ message: 'Logged out successfully' });
