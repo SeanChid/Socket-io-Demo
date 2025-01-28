@@ -5,6 +5,7 @@ export default function ChatRoom({ room, onBack }) {
     const [messages, setMessages] = useState([]);
     const [newMessage, setNewMessage] = useState('');
     const [error, setError] = useState('');
+    const [sending, setSending] = useState(false);
     const messagesEndRef = useRef(null);
 
     const scrollToBottom = () => {
@@ -15,7 +16,9 @@ export default function ChatRoom({ room, onBack }) {
         // Load existing messages
         const loadMessages = async () => {
             try {
-                const response = await fetch(`/api/rooms/${room.room_id}/messages`);
+                const response = await fetch(`/api/rooms/${room.room_id}/messages`, {
+                    credentials: 'include'
+                });
                 if (!response.ok) throw new Error('Failed to load messages');
                 const data = await response.json();
                 setMessages(data);
@@ -30,30 +33,60 @@ export default function ChatRoom({ room, onBack }) {
         // Join the room
         socket.emit('join-room', room.room_id);
 
-        // Listen for new messages
+        // Listen for new messages from others
         const handleNewMessage = (message) => {
-            setMessages(prev => [...prev, message]);
-            scrollToBottom();
+            if (message.sender.id !== socket.user?.id) {
+                setMessages(prev => [...prev, message]);
+                scrollToBottom();
+            }
         };
 
         socket.on('new-message', handleNewMessage);
+        socket.on('error', (error) => setError(error.message));
 
         return () => {
             socket.off('new-message', handleNewMessage);
+            socket.off('error');
             socket.emit('leave-room', room.room_id);
         };
     }, [room.room_id]);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!newMessage.trim()) return;
+        if (!newMessage.trim() || sending) return;
 
-        socket.emit('send-room-message', {
-            roomId: room.room_id,
-            content: newMessage.trim()
-        });
-
+        const messageContent = newMessage.trim();
         setNewMessage('');
+        setSending(true);
+
+        try {
+            // Optimistically add the message
+            const tempMessage = {
+                message_id: Date.now(), // temporary ID
+                content: messageContent,
+                created_at: new Date().toISOString(),
+                sender: {
+                    id: socket.user?.id,
+                    username: socket.user?.username
+                }
+            };
+            
+            setMessages(prev => [...prev, tempMessage]);
+            scrollToBottom();
+
+            // Send the message
+            socket.emit('send-room-message', {
+                roomId: room.room_id,
+                content: messageContent
+            });
+
+        } catch (error) {
+            setError('Failed to send message. Please try again.');
+            // Remove the optimistically added message
+            setMessages(prev => prev.filter(msg => msg.message_id !== tempMessage.message_id));
+        } finally {
+            setSending(false);
+        }
     };
 
     return (
@@ -66,11 +99,19 @@ export default function ChatRoom({ room, onBack }) {
                 </div>
             </div>
 
-            {error && <div className="error-message">{error}</div>}
+            {error && (
+                <div className="error-message">
+                    {error}
+                    <button onClick={() => setError('')}>×</button>
+                </div>
+            )}
 
             <div className="messages-container">
                 {messages.map((message) => (
-                    <div key={message.message_id} className="message">
+                    <div 
+                        key={message.message_id} 
+                        className={`message ${message.sender.id === socket.user?.id ? 'own-message' : ''}`}
+                    >
                         <div className="message-header">
                             <span className="username">{message.sender.username}</span>
                             <span className="timestamp">
@@ -90,8 +131,11 @@ export default function ChatRoom({ room, onBack }) {
                     onChange={(e) => setNewMessage(e.target.value)}
                     placeholder="Type a message..."
                     className="message-input"
+                    disabled={sending}
                 />
-                <button type="submit" className="send-button">Send</button>
+                <button type="submit" className="send-button" disabled={sending}>
+                    {sending ? 'Sending...' : 'Send'}
+                </button>
             </form>
         </div>
     );

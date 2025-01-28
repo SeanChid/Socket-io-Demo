@@ -1,4 +1,13 @@
-function RoomList({ rooms, onRoomSelect, onCreateRoom, showCreateRoom, newRoomName, setNewRoomName, setShowCreateRoom }) {
+function RoomList({ 
+    rooms, 
+    onRoomSelect, 
+    onCreateRoom, 
+    showCreateRoom, 
+    newRoomName, 
+    setNewRoomName, 
+    setShowCreateRoom,
+    onBrowseRooms 
+}) {
     const handleCreateRoom = (e) => {
         e.preventDefault();
         if (!newRoomName.trim()) return;
@@ -9,12 +18,20 @@ function RoomList({ rooms, onRoomSelect, onCreateRoom, showCreateRoom, newRoomNa
         <div className="rooms-section">
             <div className="section-header">
                 <h2>Chat Rooms</h2>
-                <button 
-                    className="create-button"
-                    onClick={() => setShowCreateRoom(true)}
-                >
-                    Create Room
-                </button>
+                <div className="room-actions">
+                    <button 
+                        className="browse-button"
+                        onClick={onBrowseRooms}
+                    >
+                        Browse Rooms
+                    </button>
+                    <button 
+                        className="create-button"
+                        onClick={() => setShowCreateRoom(true)}
+                    >
+                        Create Room
+                    </button>
+                </div>
             </div>
 
             {showCreateRoom && (
@@ -52,7 +69,8 @@ function RoomList({ rooms, onRoomSelect, onCreateRoom, showCreateRoom, newRoomNa
             <div className="room-list">
                 {rooms.length === 0 ? (
                     <div className="no-rooms">
-                        No chat rooms available. Create one to get started!
+                        <p>No chat rooms available.</p>
+                        <p>Create one or browse existing rooms to get started!</p>
                     </div>
                 ) : (
                     rooms.map(room => (

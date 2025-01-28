@@ -10,6 +10,7 @@ import RoomList from './components/RoomList'
 import PrivateChatList from './components/PrivateChatList'
 import LoadingSpinner from './components/LoadingSpinner'
 import ErrorMessage from './components/ErrorMessage'
+import AvailableRooms from './components/AvailableRooms'
 
 function App() {
     const [user, setUser] = useState(null);
@@ -20,6 +21,7 @@ function App() {
     const [activePrivateChat, setActivePrivateChat] = useState(null);
     const [showCreateRoom, setShowCreateRoom] = useState(false);
     const [showFindUsers, setShowFindUsers] = useState(false);
+    const [showAvailableRooms, setShowAvailableRooms] = useState(false);
     const [newRoomName, setNewRoomName] = useState('');
     const [error, setError] = useState('');
 
@@ -188,6 +190,11 @@ function App() {
         }
     };
 
+    const handleJoinRoom = (room) => {
+        setRooms(prev => [...prev, room]);
+        setShowAvailableRooms(false);
+    };
+
     if (loading) {
         return <LoadingSpinner />;
     }
@@ -237,6 +244,7 @@ function App() {
                     newRoomName={newRoomName}
                     setNewRoomName={setNewRoomName}
                     setShowCreateRoom={setShowCreateRoom}
+                    onBrowseRooms={() => setShowAvailableRooms(true)}
                 />
 
                 <PrivateChatList
@@ -251,6 +259,13 @@ function App() {
                 <UserSearch
                     onStartChat={handleStartPrivateChat}
                     onClose={() => setShowFindUsers(false)}
+                />
+            )}
+
+            {showAvailableRooms && (
+                <AvailableRooms
+                    onJoinRoom={handleJoinRoom}
+                    onClose={() => setShowAvailableRooms(false)}
                 />
             )}
         </div>

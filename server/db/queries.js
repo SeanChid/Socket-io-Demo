@@ -189,6 +189,94 @@ export const queries = {
         }
     },
 
+    // Get all public rooms that the user hasn't joined
+    async getAvailableRooms(userId) {
+        const result = await pool.query(`
+            SELECT 
+                r.room_id,
+                r.name,
+                r.created_at,
+                COUNT(DISTINCT ur.user_id) as member_count,
+                json_build_object(
+                    'id', u.user_id,
+                    'username', u.username,
+                    'avatar_url', COALESCE(u.avatar_url, '')
+                ) as created_by
+            FROM chat_rooms r
+            JOIN users u ON r.created_by = u.user_id
+            LEFT JOIN user_rooms ur ON r.room_id = ur.room_id
+            WHERE NOT r.is_private 
+            AND r.room_id NOT IN (
+                SELECT room_id FROM user_rooms WHERE user_id = $1
+            )
+            GROUP BY r.room_id, r.name, r.created_at, u.user_id, u.username, u.avatar_url
+            ORDER BY r.created_at DESC
+        `, [userId]);
+        return result.rows;
+    },
+
+    // Join a room
+    async joinRoom(userId, roomId) {
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            // Check if room exists and is not private
+            const roomCheck = await client.query(
+                'SELECT is_private FROM chat_rooms WHERE room_id = $1',
+                [roomId]
+            );
+
+            if (roomCheck.rows.length === 0) {
+                throw new Error('Room not found');
+            }
+
+            if (roomCheck.rows[0].is_private) {
+                throw new Error('Cannot join private room without invitation');
+            }
+
+            // Check if user is already in the room
+            const memberCheck = await client.query(
+                'SELECT 1 FROM user_rooms WHERE user_id = $1 AND room_id = $2',
+                [userId, roomId]
+            );
+
+            if (memberCheck.rows.length > 0) {
+                throw new Error('Already a member of this room');
+            }
+
+            // Add user to room
+            await client.query(
+                'INSERT INTO user_rooms (user_id, room_id) VALUES ($1, $2)',
+                [userId, roomId]
+            );
+
+            await client.query('COMMIT');
+
+            // Get updated room details
+            const result = await pool.query(`
+                SELECT r.room_id, r.name, r.is_private, r.created_at,
+                       array_agg(json_build_object(
+                           'id', u.user_id, 
+                           'username', u.username, 
+                           'avatar_url', COALESCE(u.avatar_url, '')
+                       )) as members
+                FROM chat_rooms r
+                JOIN user_rooms ur ON r.room_id = ur.room_id
+                JOIN users u ON ur.user_id = u.user_id
+                WHERE r.room_id = $1
+                GROUP BY r.room_id, r.name, r.is_private, r.created_at
+            `, [roomId]);
+
+            return result.rows[0];
+        } catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        } finally {
+            client.release();
+        }
+    },
+
     // Authentication checks
     async isUserInRoom(userId, roomId) {
         const result = await pool.query(
