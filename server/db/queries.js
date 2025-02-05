@@ -116,10 +116,20 @@ const queries = {
     },
 
     async addMessage(content, senderId, roomId = null, privateChatId = null) {
-        const result = await pool.query(
-            'INSERT INTO chat_messages (content, sender_id, room_id, private_chat_id) VALUES ($1, $2, $3, $4) RETURNING *',
-            [content, senderId, roomId, privateChatId]
-        );
+        const result = await pool.query(`
+            WITH new_message AS (
+                INSERT INTO chat_messages (content, sender_id, room_id, private_chat_id) 
+                VALUES ($1, $2, $3, $4) 
+                RETURNING *
+            )
+            SELECT 
+                m.message_id,
+                m.content,
+                m.created_at,
+                json_build_object('id', u.user_id, 'username', u.username, 'avatar_url', u.avatar_url) as sender
+            FROM new_message m
+            JOIN users u ON m.sender_id = u.user_id
+        `, [content, senderId, roomId, privateChatId]);
         return result.rows[0];
     },
 

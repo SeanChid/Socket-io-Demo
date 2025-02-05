@@ -206,9 +206,14 @@ function App() {
     if (activeRoom) {
         return (
             <ChatRoom
-                room={activeRoom}
+                room={{
+                    ...activeRoom,
+                    current_user: {
+                        id: user.id,
+                        username: user.username
+                    }
+                }}
                 onBack={() => setActiveRoom(null)}
-                userId={user.id}
             />
         );
     }

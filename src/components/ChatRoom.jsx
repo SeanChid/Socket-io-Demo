@@ -35,10 +35,29 @@ export default function ChatRoom({ room, onBack }) {
 
         // Listen for new messages from others
         const handleNewMessage = (message) => {
-            if (message.sender.id !== socket.user?.id) {
-                setMessages(prev => [...prev, message]);
-                scrollToBottom();
-            }
+            setMessages(prev => {
+                // Replace temporary message if it exists (for current user's messages)
+                const messageExists = prev.some(m => 
+                    m.content === message.content && 
+                    ((m.sender?.id === message.sender?.id) || 
+                     (m.sender?.id === room.current_user.id && message.sender?.id === room.current_user.id)) &&
+                    Math.abs(new Date(m.created_at) - new Date(message.created_at)) < 5000
+                );
+                
+                if (messageExists) {
+                    return prev.map(m => 
+                        (m.content === message.content && 
+                         ((m.sender?.id === message.sender?.id) || 
+                          (m.sender?.id === room.current_user.id && message.sender?.id === room.current_user.id)) &&
+                         Math.abs(new Date(m.created_at) - new Date(message.created_at)) < 5000)
+                        ? message 
+                        : m
+                    );
+                }
+                
+                return [...prev, message];
+            });
+            scrollToBottom();
         };
 
         socket.on('new-message', handleNewMessage);
@@ -66,8 +85,8 @@ export default function ChatRoom({ room, onBack }) {
                 content: messageContent,
                 created_at: new Date().toISOString(),
                 sender: {
-                    id: socket.user?.id,
-                    username: socket.user?.username
+                    id: room.current_user.id,
+                    username: room.current_user.username
                 }
             };
             
@@ -110,7 +129,7 @@ export default function ChatRoom({ room, onBack }) {
                 {messages.map((message) => (
                     <div 
                         key={message.message_id} 
-                        className={`message ${message.sender.id === socket.user?.id ? 'own-message' : ''}`}
+                        className={`message ${message.sender.id === room.current_user.id ? 'own-message' : ''}`}
                     >
                         <div className="message-header">
                             <span className="username">{message.sender.username}</span>
