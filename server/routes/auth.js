@@ -1,4 +1,5 @@
 import queries from '../db/queries.js';
+import { requireAuth } from '../middleware/auth.js';
 
 export default function(app, io) {
     app.post('/api/register', async (req, res) => {
@@ -109,6 +110,23 @@ export default function(app, io) {
             });
         } else {
             res.json({ authenticated: false });
+        }
+    });
+
+    app.get('/api/users/search', requireAuth, async (req, res) => {
+        try {
+            const { query } = req.query;
+            if (!query) {
+                return res.status(400).json({ error: 'Search query is required' });
+            }
+            
+            const users = await queries.findUsers(query);
+            // Filter out the current user from results
+            const filteredUsers = users.filter(user => user.id !== req.session.user.id);
+            res.json(filteredUsers);
+        } catch (error) {
+            console.error('User search error:', error);
+            res.status(500).json({ error: 'Failed to search users' });
         }
     });
 }

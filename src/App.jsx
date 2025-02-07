@@ -171,8 +171,9 @@ function App() {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    userId,
+                    userId: userId.id || userId // handle both user object and direct id
                 }),
+                credentials: 'include'
             });
 
             if (!response.ok) {
@@ -180,13 +181,14 @@ function App() {
                     setUser(null);
                     return;
                 }
-                throw new Error('Failed to start chat');
+                const data = await response.json();
+                throw new Error(data.error || 'Failed to start chat');
             }
             
+            await loadPrivateChats(); // Reload the private chats list
             setShowFindUsers(false);
-            loadPrivateChats();
         } catch (error) {
-            setError('Failed to start private chat');
+            setError(error.message || 'Failed to start private chat');
         }
     };
 
@@ -262,8 +264,9 @@ function App() {
 
             {showFindUsers && (
                 <UserSearch
-                    onStartChat={handleStartPrivateChat}
+                    onSelectUser={handleStartPrivateChat}
                     onClose={() => setShowFindUsers(false)}
+                    buttonText="Start Chat"
                 />
             )}
 
