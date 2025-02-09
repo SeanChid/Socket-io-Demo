@@ -10,6 +10,7 @@ import RoomList from './components/RoomList'
 import PrivateChatList from './components/PrivateChatList'
 import LoadingSpinner from './components/LoadingSpinner'
 import ErrorMessage from './components/ErrorMessage'
+import RoomInvites from './components/RoomInvites'
 import AvailableRooms from './components/AvailableRooms'
 
 function App() {
@@ -21,7 +22,8 @@ function App() {
     const [activePrivateChat, setActivePrivateChat] = useState(null);
     const [showCreateRoom, setShowCreateRoom] = useState(false);
     const [showFindUsers, setShowFindUsers] = useState(false);
-    const [showAvailableRooms, setShowAvailableRooms] = useState(false);
+    const [showInviteUsers, setShowInviteUsers] = useState(false);
+    const [activeInviteRoom, setActiveInviteRoom] = useState(null);
     const [newRoomName, setNewRoomName] = useState('');
     const [error, setError] = useState('');
 
@@ -192,9 +194,80 @@ function App() {
         }
     };
 
-    const handleJoinRoom = (room) => {
-        setRooms(prev => [...prev, room]);
-        setShowAvailableRooms(false);
+    const handleInviteToRoom = async (userId) => {
+        try {
+            const response = await fetch(`/api/rooms/${activeInviteRoom.room_id}/invites`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    userId: userId.id || userId
+                }),
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    setUser(null);
+                    return;
+                }
+                const data = await response.json();
+                throw new Error(data.error || 'Failed to invite user');
+            }
+
+            setShowInviteUsers(false);
+            setActiveInviteRoom(null);
+            setError('User invited successfully!');
+        } catch (error) {
+            setError(error.message || 'Failed to invite user');
+        }
+    };
+
+    const handleShowInviteUsers = (room) => {
+        setActiveInviteRoom(room);
+        setShowInviteUsers(true);
+    };
+
+    const handleRoomSelect = async (room) => {
+        try {
+            // Check if we're already a member or the creator
+            const isMember = room.members.some(member => member.id === user.id);
+            const isCreator = room.created_by === user.id;
+            
+            if (!isMember && !isCreator) {
+                const response = await fetch(`/api/rooms/${room.room_id}/join`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        setUser(null);
+                        return;
+                    }
+                    const data = await response.json();
+                    throw new Error(data.error || 'Failed to join room');
+                }
+
+                // Get the updated room data from the response
+                const updatedRoom = await response.json();
+                // Update the rooms list with the new room data
+                setRooms(prevRooms => 
+                    prevRooms.map(r => 
+                        r.room_id === updatedRoom.room_id ? updatedRoom : r
+                    )
+                );
+                // Set the active room to the updated room data
+                setActiveRoom(updatedRoom);
+                return;
+            }
+
+            // If we're already a member or creator, just set the active room
+            setActiveRoom(room);
+        } catch (error) {
+            setError(error.message || 'Failed to join room');
+        }
     };
 
     if (loading) {
@@ -215,7 +288,11 @@ function App() {
                         username: user.username
                     }
                 }}
-                onBack={() => setActiveRoom(null)}
+                onBack={async () => {
+                    setActiveRoom(null);
+                    // Reload the rooms list to get updated membership status
+                    await loadRooms();
+                }}
             />
         );
     }
@@ -242,16 +319,23 @@ function App() {
                 onDismiss={() => setError('')} 
             />
 
+            <RoomInvites 
+                onInviteAccepted={(room) => {
+                    setRooms(prev => [...prev, room]);
+                }}
+            />
+
             <div className="main-content">
                 <RoomList
                     rooms={rooms}
-                    onRoomSelect={setActiveRoom}
+                    onRoomSelect={handleRoomSelect}
                     onCreateRoom={handleCreateRoom}
                     showCreateRoom={showCreateRoom}
                     newRoomName={newRoomName}
                     setNewRoomName={setNewRoomName}
                     setShowCreateRoom={setShowCreateRoom}
-                    onBrowseRooms={() => setShowAvailableRooms(true)}
+                    onInviteUsers={handleShowInviteUsers}
+                    currentUserId={user.id}
                 />
 
                 <PrivateChatList
@@ -270,10 +354,14 @@ function App() {
                 />
             )}
 
-            {showAvailableRooms && (
-                <AvailableRooms
-                    onJoinRoom={handleJoinRoom}
-                    onClose={() => setShowAvailableRooms(false)}
+            {showInviteUsers && (
+                <UserSearch
+                    onSelectUser={handleInviteToRoom}
+                    onClose={() => {
+                        setShowInviteUsers(false);
+                        setActiveInviteRoom(null);
+                    }}
+                    buttonText="Invite to Room"
                 />
             )}
         </div>

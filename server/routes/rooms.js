@@ -4,14 +4,15 @@ import { requireAuth } from '../middleware/auth.js';
 export default function(app, io) {
     app.post('/api/rooms', requireAuth, async (req, res) => {
         try {
-            const { name, isPrivate } = req.body;
+            const { name } = req.body;
             if (!name || name.trim().length === 0) {
                 return res.status(400).json({ error: 'Room name is required' });
             }
             
-            const roomId = await queries.createChatRoom(name.trim(), req.session.user.id, isPrivate);
-            const room = await queries.getUserRooms(req.session.user.id);
-            const newRoom = room.find(r => r.room_id === roomId);
+            // Create room as public by default
+            const roomId = await queries.createChatRoom(name.trim(), req.session.user.id, false);
+            const rooms = await queries.getUserRooms(req.session.user.id);
+            const newRoom = rooms.find(r => r.room_id === roomId);
             
             res.json(newRoom);
         } catch (error) {
@@ -26,16 +27,6 @@ export default function(app, io) {
             res.json(rooms);
         } catch (error) {
             res.status(500).json({ error: 'Server error' });
-        }
-    });
-
-    app.get('/api/rooms/available', requireAuth, async (req, res) => {
-        try {
-            const rooms = await queries.getAvailableRooms(req.session.user.id);
-            res.json(rooms);
-        } catch (error) {
-            console.error('Get available rooms error:', error);
-            res.status(500).json({ error: 'Failed to get available rooms' });
         }
     });
 
@@ -71,10 +62,24 @@ export default function(app, io) {
     app.post('/api/rooms/:id/invites', requireAuth, async (req, res) => {
         try {
             const { userId } = req.body;
+            
+            // Check if user is the room creator
+            const room = await queries.getRoomDetails(req.params.id);
+            if (room.created_by !== req.session.user.id) {
+                return res.status(403).json({ error: 'Only room creator can send invites' });
+            }
+
+            // Check if user is already in the room
+            const isMember = await queries.isUserInRoom(userId, req.params.id);
+            if (isMember) {
+                return res.status(400).json({ error: 'User is already a member of this room' });
+            }
+
             const invite = await queries.inviteToRoom(req.params.id, req.session.user.id, userId);
             res.json(invite);
         } catch (error) {
-            res.status(500).json({ error: 'Server error' });
+            console.error('Room invite error:', error);
+            res.status(500).json({ error: 'Failed to send invite' });
         }
     });
 }

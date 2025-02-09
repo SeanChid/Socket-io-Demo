@@ -6,7 +6,8 @@ function RoomList({
     newRoomName, 
     setNewRoomName, 
     setShowCreateRoom,
-    onBrowseRooms 
+    onInviteUsers,
+    currentUserId
 }) {
     const handleCreateRoom = (e) => {
         e.preventDefault();
@@ -14,24 +15,21 @@ function RoomList({
         onCreateRoom(newRoomName.trim());
     };
 
+    const handleInviteClick = (e, room) => {
+        e.stopPropagation(); // Prevent room selection when clicking invite
+        onInviteUsers(room);
+    };
+
     return (
         <div className="rooms-section">
             <div className="section-header">
                 <h2>Chat Rooms</h2>
-                <div className="room-actions">
-                    <button 
-                        className="browse-button"
-                        onClick={onBrowseRooms}
-                    >
-                        Browse Rooms
-                    </button>
-                    <button 
-                        className="create-button"
-                        onClick={() => setShowCreateRoom(true)}
-                    >
-                        Create Room
-                    </button>
-                </div>
+                <button 
+                    className="create-button"
+                    onClick={() => setShowCreateRoom(true)}
+                >
+                    Create Room
+                </button>
             </div>
 
             {showCreateRoom && (
@@ -45,7 +43,7 @@ function RoomList({
                         required
                         minLength={3}
                         maxLength={50}
-                        pattern="[A-Za-z0-9\s-]+"
+                        pattern="[A-Za-z0-9\s\-]+"
                         title="Room name can only contain letters, numbers, spaces, and hyphens"
                     />
                     <div className="form-buttons">
@@ -70,7 +68,7 @@ function RoomList({
                 {rooms.length === 0 ? (
                     <div className="no-rooms">
                         <p>No chat rooms available.</p>
-                        <p>Create one or browse existing rooms to get started!</p>
+                        <p>Create a room to get started!</p>
                     </div>
                 ) : (
                     rooms.map(room => (
@@ -79,10 +77,20 @@ function RoomList({
                             className="room-item"
                             onClick={() => onRoomSelect(room)}
                         >
-                            <span className="room-name">{room.name}</span>
-                            <span className="member-count">
-                                {room.members.length} {room.members.length === 1 ? 'member' : 'members'}
-                            </span>
+                            <div className="room-info">
+                                <span className="room-name">{room.name}</span>
+                                <span className="member-count">
+                                    {room.members.length} {room.members.length === 1 ? 'member' : 'members'}
+                                </span>
+                            </div>
+                            {room.created_by === currentUserId && (
+                                <button
+                                    className="invite-button"
+                                    onClick={(e) => handleInviteClick(e, room)}
+                                >
+                                    Invite Users
+                                </button>
+                            )}
                         </div>
                     ))
                 )}
