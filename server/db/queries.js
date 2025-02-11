@@ -248,41 +248,40 @@ const queries = {
                 [userId, roomId]
             );
 
-            if (memberCheck.rows.length > 0) {
-                throw new Error('Already a member of this room');
-            }
+            // Only try to join if not already a member
+            if (memberCheck.rows.length === 0) {
+                // Allow joining if:
+                // 1. User is the creator
+                // 2. Room is public
+                // 3. User has an invitation
+                if (room.created_by !== userId && room.is_private) {
+                    // Check for invitation
+                    const inviteCheck = await client.query(
+                        'SELECT 1 FROM group_invites WHERE room_id = $1 AND invitee_id = $2 AND status = \'pending\'',
+                        [roomId, userId]
+                    );
+                    
+                    if (inviteCheck.rows.length === 0) {
+                        throw new Error('Cannot join private room without invitation');
+                    }
+                }
 
-            // Allow joining if:
-            // 1. User is the creator
-            // 2. Room is public
-            // 3. User has an invitation
-            if (room.created_by !== userId && room.is_private) {
-                // Check for invitation
-                const inviteCheck = await client.query(
-                    'SELECT 1 FROM group_invites WHERE room_id = $1 AND invitee_id = $2 AND status = \'pending\'',
+                // Add user to room
+                await client.query(
+                    'INSERT INTO user_rooms (user_id, room_id) VALUES ($1, $2)',
+                    [userId, roomId]
+                );
+
+                // If user had an invitation, mark it as accepted
+                await client.query(
+                    'UPDATE group_invites SET status = \'accepted\' WHERE room_id = $1 AND invitee_id = $2 AND status = \'pending\'',
                     [roomId, userId]
                 );
-                
-                if (inviteCheck.rows.length === 0) {
-                    throw new Error('Cannot join private room without invitation');
-                }
             }
-
-            // Add user to room
-            await client.query(
-                'INSERT INTO user_rooms (user_id, room_id) VALUES ($1, $2)',
-                [userId, roomId]
-            );
-
-            // If user had an invitation, mark it as accepted
-            await client.query(
-                'UPDATE group_invites SET status = \'accepted\' WHERE room_id = $1 AND invitee_id = $2 AND status = \'pending\'',
-                [roomId, userId]
-            );
 
             await client.query('COMMIT');
 
-            // Get updated room details
+            // Get room details regardless of whether we just joined or were already a member
             const result = await pool.query(`
                 SELECT r.room_id, r.name, r.is_private, r.created_at, r.created_by,
                        array_agg(json_build_object(

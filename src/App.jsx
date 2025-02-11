@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, useNavigate, useParams } from 'react-router-dom'
 import './App.css'
 import socket from './socket'
 import Auth from './components/Auth'
@@ -13,107 +14,32 @@ import ErrorMessage from './components/ErrorMessage'
 import RoomInvites from './components/RoomInvites'
 import AvailableRooms from './components/AvailableRooms'
 
-function App() {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
+function MainLayout({ user, onLogout, error, onErrorDismiss }) {
+    const navigate = useNavigate();
     const [rooms, setRooms] = useState([]);
     const [privateChats, setPrivateChats] = useState([]);
-    const [activeRoom, setActiveRoom] = useState(null);
-    const [activePrivateChat, setActivePrivateChat] = useState(null);
     const [showCreateRoom, setShowCreateRoom] = useState(false);
     const [showFindUsers, setShowFindUsers] = useState(false);
     const [showInviteUsers, setShowInviteUsers] = useState(false);
     const [activeInviteRoom, setActiveInviteRoom] = useState(null);
     const [newRoomName, setNewRoomName] = useState('');
-    const [error, setError] = useState('');
 
     useEffect(() => {
-        checkSession();
+        loadRooms();
+        loadPrivateChats();
     }, []);
-
-    useEffect(() => {
-        if (user) {
-            loadRooms();
-            loadPrivateChats();
-            setupSocketListeners();
-        } else {
-            socket.disconnect();
-        }
-
-        return () => {
-            socket.off('connect');
-            socket.off('connect_error');
-            socket.off('user-online');
-            socket.off('user-offline');
-        };
-    }, [user]);
-
-    const setupSocketListeners = () => {
-        socket.connect();
-        
-        socket.on('connect', () => {
-            console.log('Socket connected');
-        });
-
-        socket.on('connect_error', (error) => {
-            if (error.message === 'Unauthorized') {
-                setUser(null);
-                socket.disconnect();
-            }
-        });
-
-        socket.on('user-online', ({ username }) => {
-            console.log(`${username} is online`);
-        });
-
-        socket.on('user-offline', ({ username }) => {
-            console.log(`${username} is offline`);
-        });
-    };
-
-    const checkSession = async () => {
-        try {
-            const response = await fetch('/api/session');
-            const data = await response.json();
-            
-            if (data.authenticated) {
-                setUser(data.user);
-            }
-        } catch (error) {
-            console.error('Session check failed:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleLogout = async () => {
-        try {
-            await fetch('/api/logout', { method: 'POST' });
-            setUser(null);
-            setRooms([]);
-            setPrivateChats([]);
-            setActiveRoom(null);
-            setActivePrivateChat(null);
-            socket.disconnect();
-        } catch (error) {
-            setError('Failed to logout');
-        }
-    };
 
     const loadRooms = async () => {
         try {
             const response = await fetch('/api/rooms');
             if (!response.ok) {
-                if (response.status === 401) {
-                    setUser(null);
-                    return;
-                }
+                if (response.status === 401) return;
                 throw new Error('Failed to load rooms');
             }
             const data = await response.json();
             setRooms(data);
         } catch (error) {
-            setError('Failed to load rooms');
+            onErrorDismiss('Failed to load rooms');
         }
     };
 
@@ -121,16 +47,13 @@ function App() {
         try {
             const response = await fetch('/api/private-chats');
             if (!response.ok) {
-                if (response.status === 401) {
-                    setUser(null);
-                    return;
-                }
+                if (response.status === 401) return;
                 throw new Error('Failed to load private chats');
             }
             const data = await response.json();
             setPrivateChats(data);
         } catch (error) {
-            setError('Failed to load private chats');
+            onErrorDismiss('Failed to load private chats');
         }
     };
 
@@ -138,100 +61,23 @@ function App() {
         try {
             const response = await fetch('/api/rooms', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    name: roomName,
-                    isPrivate: false,
-                }),
-                credentials: 'include' // Add this to include session cookie
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: roomName, isPrivate: false }),
+                credentials: 'include'
             });
 
-            if (!response.ok) {
-                if (response.status === 401) {
-                    setUser(null);
-                    return;
-                }
-                const data = await response.json();
-                throw new Error(data.error || 'Failed to create room');
-            }
+            if (!response.ok) throw new Error('Failed to create room');
             
             setNewRoomName('');
             setShowCreateRoom(false);
-            await loadRooms(); // Wait for rooms to load
+            await loadRooms();
         } catch (error) {
-            setError(error.message || 'Failed to create room');
+            onErrorDismiss(error.message);
         }
-    };
-
-    const handleStartPrivateChat = async (userId) => {
-        try {
-            const response = await fetch('/api/private-chats', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    userId: userId.id || userId // handle both user object and direct id
-                }),
-                credentials: 'include'
-            });
-
-            if (!response.ok) {
-                if (response.status === 401) {
-                    setUser(null);
-                    return;
-                }
-                const data = await response.json();
-                throw new Error(data.error || 'Failed to start chat');
-            }
-            
-            await loadPrivateChats(); // Reload the private chats list
-            setShowFindUsers(false);
-        } catch (error) {
-            setError(error.message || 'Failed to start private chat');
-        }
-    };
-
-    const handleInviteToRoom = async (userId) => {
-        try {
-            const response = await fetch(`/api/rooms/${activeInviteRoom.room_id}/invites`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    userId: userId.id || userId
-                }),
-                credentials: 'include'
-            });
-
-            if (!response.ok) {
-                if (response.status === 401) {
-                    setUser(null);
-                    return;
-                }
-                const data = await response.json();
-                throw new Error(data.error || 'Failed to invite user');
-            }
-
-            setShowInviteUsers(false);
-            setActiveInviteRoom(null);
-            setError('User invited successfully!');
-        } catch (error) {
-            setError(error.message || 'Failed to invite user');
-        }
-    };
-
-    const handleShowInviteUsers = (room) => {
-        setActiveInviteRoom(room);
-        setShowInviteUsers(true);
     };
 
     const handleRoomSelect = async (room) => {
         try {
-            // Check if we're already a member or the creator
             const isMember = room.members.some(member => member.id === user.id);
             const isCreator = room.created_by === user.id;
             
@@ -241,89 +87,20 @@ function App() {
                     credentials: 'include'
                 });
 
-                if (!response.ok) {
-                    if (response.status === 401) {
-                        setUser(null);
-                        return;
-                    }
-                    const data = await response.json();
-                    throw new Error(data.error || 'Failed to join room');
-                }
-
-                // Get the updated room data from the response
-                const updatedRoom = await response.json();
-                // Update the rooms list with the new room data
-                setRooms(prevRooms => 
-                    prevRooms.map(r => 
-                        r.room_id === updatedRoom.room_id ? updatedRoom : r
-                    )
-                );
-                // Set the active room to the updated room data
-                setActiveRoom(updatedRoom);
-                return;
+                if (!response.ok) throw new Error('Failed to join room');
+                await loadRooms();
             }
-
-            // If we're already a member or creator, just set the active room
-            setActiveRoom(room);
+            navigate(`/room/${room.room_id}`);
         } catch (error) {
-            setError(error.message || 'Failed to join room');
+            onErrorDismiss(error.message);
         }
     };
 
-    if (loading) {
-        return <LoadingSpinner />;
-    }
-
-    if (!user) {
-        return <Auth onAuth={setUser} />;
-    }
-
-    if (activeRoom) {
-        return (
-            <ChatRoom
-                room={{
-                    ...activeRoom,
-                    current_user: {
-                        id: user.id,
-                        username: user.username
-                    }
-                }}
-                onBack={async () => {
-                    setActiveRoom(null);
-                    // Reload the rooms list to get updated membership status
-                    await loadRooms();
-                }}
-            />
-        );
-    }
-
-    if (activePrivateChat) {
-        return (
-            <PrivateChat
-                chat={activePrivateChat}
-                onBack={() => setActivePrivateChat(null)}
-                userId={user.id}
-            />
-        );
-    }
-
     return (
         <div className="app-container">
-            <Header 
-                username={user.username} 
-                onLogout={handleLogout} 
-            />
-            
-            <ErrorMessage 
-                message={error} 
-                onDismiss={() => setError('')} 
-            />
-
-            <RoomInvites 
-                onInviteAccepted={(room) => {
-                    setRooms(prev => [...prev, room]);
-                }}
-            />
+            <Header username={user.username} onLogout={onLogout} />
+            <ErrorMessage message={error} onDismiss={onErrorDismiss} />
+            <RoomInvites onInviteAccepted={loadRooms} />
 
             <div className="main-content">
                 <RoomList
@@ -334,13 +111,13 @@ function App() {
                     newRoomName={newRoomName}
                     setNewRoomName={setNewRoomName}
                     setShowCreateRoom={setShowCreateRoom}
-                    onInviteUsers={handleShowInviteUsers}
+                    onInviteUsers={setShowInviteUsers}
                     currentUserId={user.id}
                 />
 
                 <PrivateChatList
                     privateChats={privateChats}
-                    onChatSelect={setActivePrivateChat}
+                    onChatSelect={(chat) => navigate(`/private/${chat.chat_id}`)}
                     onFindUsers={setShowFindUsers}
                     showFindUsers={showFindUsers}
                 />
@@ -365,6 +142,179 @@ function App() {
                 />
             )}
         </div>
+    );
+}
+
+function ChatRoomView({ user, onError }) {
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const [room, setRoom] = useState(null);
+
+    useEffect(() => {
+        const loadRoom = async () => {
+            try {
+                const response = await fetch(`/api/rooms/${id}/join`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to join room');
+                }
+
+                const roomData = await response.json();
+                setRoom(roomData);
+                socket.emit('join-room', id);
+            } catch (error) {
+                onError(error.message);
+                navigate('/');
+            }
+        };
+        loadRoom();
+        return () => socket.emit('leave-room', id);
+    }, [id]);
+
+    if (!room) return <LoadingSpinner />;
+
+    return (
+        <ChatRoom
+            room={{
+                ...room,
+                current_user: {
+                    id: user.id,
+                    username: user.username
+                }
+            }}
+            onBack={() => navigate('/')}
+        />
+    );
+}
+
+function PrivateChatView({ user }) {
+    const { id } = useParams();
+    const navigate = useNavigate();
+    const [chat, setChat] = useState(null);
+
+    useEffect(() => {
+        const loadChat = async () => {
+            try {
+                const response = await fetch(`/api/private-chats/${id}`);
+                if (!response.ok) throw new Error('Failed to load chat');
+                const chatData = await response.json();
+                setChat(chatData);
+            } catch (error) {
+                navigate('/');
+            }
+        };
+        loadChat();
+    }, [id]);
+
+    if (!chat) return <LoadingSpinner />;
+
+    return (
+        <PrivateChat
+            chat={chat}
+            onBack={() => navigate('/')}
+            userId={user.id}
+        />
+    );
+}
+
+function App() {
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        checkSession();
+    }, []);
+
+    useEffect(() => {
+        if (user) {
+            socket.connect();
+            setupSocketListeners();
+        } else {
+            socket.disconnect();
+        }
+
+        return () => {
+            socket.off('connect');
+            socket.off('connect_error');
+            socket.off('user-online');
+            socket.off('user-offline');
+        };
+    }, [user]);
+
+    const checkSession = async () => {
+        try {
+            const response = await fetch('/api/session');
+            const data = await response.json();
+            if (data.authenticated) setUser(data.user);
+        } catch (error) {
+            console.error('Session check failed:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const setupSocketListeners = () => {
+        socket.on('connect', () => console.log('Socket connected'));
+        socket.on('connect_error', (error) => {
+            if (error.message === 'Unauthorized') {
+                setUser(null);
+                socket.disconnect();
+            }
+        });
+    };
+
+    const handleLogout = async () => {
+        try {
+            await fetch('/api/logout', { method: 'POST' });
+            setUser(null);
+            socket.disconnect();
+        } catch (error) {
+            setError('Failed to logout');
+        }
+    };
+
+    if (loading) return <LoadingSpinner />;
+    if (!user) return <Auth onAuth={setUser} />;
+
+    return (
+        <BrowserRouter>
+            <Routes>
+                <Route 
+                    path="/" 
+                    element={
+                        <MainLayout 
+                            user={user}
+                            onLogout={handleLogout}
+                            error={error}
+                            onErrorDismiss={() => setError('')}
+                        />
+                    } 
+                />
+                <Route 
+                    path="/room/:id" 
+                    element={
+                        <ChatRoomView 
+                            user={user}
+                            onError={setError}
+                        />
+                    } 
+                />
+                <Route 
+                    path="/private/:id" 
+                    element={
+                        <PrivateChatView 
+                            user={user}
+                            onError={setError}
+                        />
+                    } 
+                />
+            </Routes>
+        </BrowserRouter>
     );
 }
 
