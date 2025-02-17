@@ -1,3 +1,5 @@
+import './styles/PrivateChat.css';
+
 function PrivateChatList({ privateChats, onChatSelect, onFindUsers, showFindUsers }) {
     return (
         <div className="private-chats-section">

@@ -1,3 +1,5 @@
+import './styles/Room.css';
+
 function RoomList({ 
     rooms, 
     onRoomSelect, 

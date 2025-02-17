@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import socket from '../socket';
+import './styles/Room.css';
 
 export default function ChatRoom({ room, onBack }) {
     const [messages, setMessages] = useState([]);

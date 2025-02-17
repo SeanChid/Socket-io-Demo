@@ -1,4 +1,4 @@
-/* General styles */
+/* Global variables */
 :root {
   --primary-color: #2196f3;
   --secondary-color: #1976d2;
@@ -9,6 +9,7 @@
   --hover-color: #e3f2fd;
 }
 
+/* Global styles */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -20,6 +21,19 @@ body {
   color: var(--text-color);
   line-height: 1.6;
   background-color: var(--background-color);
+}
+
+/* App container styles */
+.app-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.main-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
 }
 
 /* Auth styles */

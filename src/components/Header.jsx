@@ -1,3 +1,5 @@
+import './styles/Header.css';
+
 function Header({ username, onLogout }) {
     return (
         <header className="app-header">
