@@ -32,21 +32,45 @@ export default function(io, socket) {
     // Join private chat
     socket.on('join-private-chat', async (chatId) => {
         try {
+            if (!socket.user) {
+                socket.emit('error', { message: 'Unauthorized' });
+                return;
+            }
+
             // Verify chat membership
             const isMember = await queries.isUserInPrivateChat(socket.user.id, chatId);
             if (!isMember) {
                 socket.emit('error', { message: 'Not a member of this chat' });
                 return;
             }
-            socket.join(`private:${chatId}`);
+
+            // Leave any previous private chats
+            for (const room of socket.rooms) {
+                if (room.startsWith('private:')) {
+                    socket.leave(room);
+                }
+            }
+
+            // Join the new private chat room
+            const roomName = `private:${chatId}`;
+            socket.join(roomName);
+
+            // Emit success event
+            socket.emit('private-chat-joined', { chatId });
         } catch (error) {
+            console.error('Error joining private chat:', error);
             socket.emit('error', { message: 'Failed to join private chat' });
         }
     });
 
     // Leave private chat
     socket.on('leave-private-chat', (chatId) => {
-        socket.leave(`private:${chatId}`);
+        const roomName = `private:${chatId}`;
+        socket.leave(roomName);
+        socket.to(roomName).emit('user-left-private-chat', { 
+            userId: socket.user.id, 
+            username: socket.user.username 
+        });
     });
 
     // Send message to room
@@ -56,6 +80,14 @@ export default function(io, socket) {
                 socket.emit('error', { message: 'Unauthorized' });
                 return;
             }
+
+            // Verify room membership
+            const isMember = await queries.isUserInRoom(socket.user.id, roomId);
+            if (!isMember) {
+                socket.emit('error', { message: 'Not a member of this room' });
+                return;
+            }
+
             const message = await queries.addMessage(content, socket.user.id, roomId);
             io.to(`room:${roomId}`).emit('new-message', message);
         } catch (error) {
@@ -71,8 +103,17 @@ export default function(io, socket) {
                 socket.emit('error', { message: 'Unauthorized' });
                 return;
             }
+
+            // Verify chat membership
+            const isMember = await queries.isUserInPrivateChat(socket.user.id, chatId);
+            if (!isMember) {
+                socket.emit('error', { message: 'Not a member of this chat' });
+                return;
+            }
+
             const message = await queries.addMessage(content, socket.user.id, null, chatId);
-            io.to(`private:${chatId}`).emit('new-message', message);
+            const messageWithChatId = { ...message, chat_id: chatId };
+            io.to(`private:${chatId}`).emit('new-message', messageWithChatId);
         } catch (error) {
             console.error('Error sending private message:', error);
             socket.emit('error', { message: 'Failed to send message' });

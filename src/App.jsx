@@ -195,20 +195,38 @@ function PrivateChatView({ user }) {
     const { id } = useParams();
     const navigate = useNavigate();
     const [chat, setChat] = useState(null);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         const loadChat = async () => {
             try {
-                const response = await fetch(`/api/private-chats/${id}`);
-                if (!response.ok) throw new Error('Failed to load chat');
+                const response = await fetch(`/api/private-chats/${id}`, {
+                    credentials: 'include'
+                });
+                
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.error || 'Failed to load chat');
+                }
+                
                 const chatData = await response.json();
                 setChat(chatData);
             } catch (error) {
-                navigate('/');
+                setError(error.message);
+                // Wait a moment before navigating back so the user can see the error
+                setTimeout(() => navigate('/'), 2000);
             }
         };
         loadChat();
-    }, [id]);
+    }, [id, navigate]);
+
+    if (error) {
+        return (
+            <div className="error-container">
+                <div className="error-message">{error}</div>
+            </div>
+        );
+    }
 
     if (!chat) return <LoadingSpinner />;
 

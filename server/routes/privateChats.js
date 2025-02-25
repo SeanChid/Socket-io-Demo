@@ -40,12 +40,47 @@ export default function(app) {
         }
     });
 
+    // Add endpoint to get a specific private chat
+    app.get('/api/private-chats/:id', requireAuth, async (req, res) => {
+        try {
+            const chatId = req.params.id;
+            
+            // Check if user is a member of this chat
+            const isMember = await queries.isUserInPrivateChat(req.session.user.id, chatId);
+            if (!isMember) {
+                return res.status(403).json({ error: 'Not a member of this chat' });
+            }
+
+            // Get all user's chats and find the specific one
+            const chats = await queries.getUserPrivateChats(req.session.user.id);
+            const chat = chats.find(c => c.chat_id === parseInt(chatId));
+            
+            if (!chat) {
+                return res.status(404).json({ error: 'Chat not found' });
+            }
+
+            res.json(chat);
+        } catch (error) {
+            console.error('Get private chat error:', error);
+            res.status(500).json({ error: 'Failed to load chat' });
+        }
+    });
+
     app.get('/api/private-chats/:id/messages', requireAuth, async (req, res) => {
         try {
-            const messages = await queries.getPrivateChatMessages(req.params.id);
+            const chatId = req.params.id;
+            
+            // Check if user is a member of this chat
+            const isMember = await queries.isUserInPrivateChat(req.session.user.id, chatId);
+            if (!isMember) {
+                return res.status(403).json({ error: 'Not a member of this chat' });
+            }
+
+            const messages = await queries.getPrivateChatMessages(chatId);
             res.json(messages);
         } catch (error) {
-            res.status(500).json({ error: 'Server error' });
+            console.error('Get private chat messages error:', error);
+            res.status(500).json({ error: 'Failed to load messages' });
         }
     });
 }

@@ -58,9 +58,25 @@ const io = new Server(httpServer, {
 })
 
 // Share session middleware with Socket.IO
-io.engine.use((req, res, next) => {
-    sessionMiddleware(req, res, next)
-})
+const wrap = middleware => (socket, next) => middleware(socket.request, {}, next);
+io.use(wrap(sessionMiddleware));
+
+// Add authentication middleware for sockets
+io.use((socket, next) => {
+    const session = socket.request.session;
+    if (!session || !session.user) {
+        next(new Error('Unauthorized'));
+        return;
+    }
+    socket.user = session.user;
+    next();
+});
+
+// Initialize socket handlers with io instance
+io.on('connection', (socket) => {
+    console.log('User connected:', socket.user.username);
+    socketHandlers(io, socket);
+});
 
 // File upload configuration
 const storage = multer.diskStorage({
@@ -113,30 +129,6 @@ authRoutes(app, io)
 roomRoutes(app, io)
 privateChatRoutes(app)
 inviteRoutes(app)
-
-// Socket.IO middleware for authentication
-io.use((socket, next) => {
-    const session = socket.request.session;
-    if (session && session.user) {
-        socket.user = session.user;
-        next();
-    } else {
-        next(new Error('Unauthorized'));
-    }
-});
-
-// Socket.IO connection handling
-io.on('connection', (socket) => {
-    console.log('User connected:', socket.user.username);
-    // Notify others that user is online
-    socket.broadcast.emit('user-online', { 
-        userId: socket.user.id, 
-        username: socket.user.username 
-    });
-
-    // Initialize socket event handlers
-    socketHandlers(io, socket);
-});
 
 // Start server
 httpServer.listen(3000, () => {
