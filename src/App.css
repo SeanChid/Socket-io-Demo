@@ -26,18 +26,16 @@ body {
 /* App container styles */
 .app-container {
   max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
   padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-.main-content {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
-/* Auth styles */
 .auth-container {
+  width: 100%;
   max-width: 400px;
   margin: 2rem auto;
   padding: 2rem;
@@ -104,8 +102,12 @@ body {
 /* App container styles */
 .app-container {
   max-width: 1200px;
+  width: 100%;
   margin: 0 auto;
   padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .app-header {
@@ -139,6 +141,8 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1rem;
+  width: 100%;
+  justify-content: center;
 }
 
 .section-header {
