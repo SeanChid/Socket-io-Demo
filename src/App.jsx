@@ -96,6 +96,50 @@ function MainLayout({ user, onLogout, error, onErrorDismiss }) {
         }
     };
 
+    const handleStartPrivateChat = async (otherUser) => {
+        try {
+            const response = await fetch('/api/private-chats', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ otherUserId: otherUser.id }),
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Failed to start private chat');
+            }
+
+            const chat = await response.json();
+            setShowFindUsers(false);
+            await loadPrivateChats();
+            navigate(`/private/${chat.chat_id}`);
+        } catch (error) {
+            onErrorDismiss(error.message);
+        }
+    };
+
+    const handleInviteToRoom = async (userToInvite) => {
+        try {
+            const response = await fetch(`/api/rooms/${activeInviteRoom}/invite`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: userToInvite.id }),
+                credentials: 'include'
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Failed to invite user');
+            }
+
+            setShowInviteUsers(false);
+            setActiveInviteRoom(null);
+        } catch (error) {
+            onErrorDismiss(error.message);
+        }
+    };
+
     return (
         <div className="app-container">
             <Header username={user.username} onLogout={onLogout} />

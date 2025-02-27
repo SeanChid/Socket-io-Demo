@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import socket from '../socket';
+import { formatMessageDate, formatMessageTime, groupMessagesByDate } from '../utils/dateFormatting';
 import './styles/PrivateChat.css'
 
 export default function PrivateChat({ chat, onBack }) {
@@ -66,25 +67,14 @@ export default function PrivateChat({ chat, onBack }) {
             }
         };
 
-        // Listen for other user leaving
-        const handleUserLeft = ({ userId, username }) => {
-            setMessages(prev => [...prev, {
-                type: 'system',
-                content: `${username} left the chat`,
-                created_at: new Date().toISOString()
-            }]);
-        };
-
         socket.on('private-chat-joined', handleJoinedChat);
         socket.on('new-message', handleNewMessage);
         socket.on('error', handleError);
-        socket.on('user-left-private-chat', handleUserLeft);
 
         return () => {
             socket.off('private-chat-joined', handleJoinedChat);
             socket.off('new-message', handleNewMessage);
             socket.off('error', handleError);
-            socket.off('user-left-private-chat', handleUserLeft);
             socket.emit('leave-private-chat', chat.chat_id);
         };
     }, [chat.chat_id, onBack]);
@@ -113,6 +103,8 @@ export default function PrivateChat({ chat, onBack }) {
         );
     }
 
+    const messageGroups = groupMessagesByDate(messages);
+
     return (
         <div className="private-chat">
             <div className="chat-header">
@@ -123,22 +115,22 @@ export default function PrivateChat({ chat, onBack }) {
             {error && <div className="error-message">{error}</div>}
 
             <div className="messages-container">
-                {messages.map((message, index) => (
-                    <div key={message.message_id || `system-${index}`} 
-                         className={`message ${message.type === 'system' ? 'system-message' : ''}`}>
-                        {message.type === 'system' ? (
-                            <div className="system-content">{message.content}</div>
-                        ) : (
-                            <>
+                {messageGroups.map((group) => (
+                    <div key={group.date.toISOString()} className="message-group">
+                        <div className="date-separator">
+                            <span>{formatMessageDate(group.date)}</span>
+                        </div>
+                        {group.messages.map((message) => (
+                            <div key={message.message_id} className="message">
                                 <div className="message-header">
                                     <span className="username">{message.sender.username}</span>
                                     <span className="timestamp">
-                                        {new Date(message.created_at).toLocaleTimeString()}
+                                        {formatMessageTime(message.created_at)}
                                     </span>
                                 </div>
                                 <div className="message-content">{message.content}</div>
-                            </>
-                        )}
+                            </div>
+                        ))}
                     </div>
                 ))}
                 <div ref={messagesEndRef} />
