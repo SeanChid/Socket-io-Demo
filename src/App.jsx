@@ -155,7 +155,10 @@ function MainLayout({ user, onLogout, error, onErrorDismiss }) {
                     newRoomName={newRoomName}
                     setNewRoomName={setNewRoomName}
                     setShowCreateRoom={setShowCreateRoom}
-                    onInviteUsers={setShowInviteUsers}
+                    onInviteUsers={(room) => {
+                        setActiveInviteRoom(room.room_id);
+                        setShowInviteUsers(true);
+                    }}
                     currentUserId={user.id}
                 />
 

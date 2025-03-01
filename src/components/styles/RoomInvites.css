@@ -1,0 +1,95 @@
+.room-invites {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 10px 0;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.room-invites h3 {
+    margin: 0 0 15px 0;
+    color: #2c3e50;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.invite-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.invite-item {
+    background: white;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.2s ease;
+}
+
+.invite-item:hover {
+    border-color: #d1d5da;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.invite-item span {
+    color: #24292e;
+    font-size: 0.95rem;
+    line-height: 1.4;
+}
+
+.invite-item .room-name {
+    font-weight: 600;
+    color: #0366d6;
+}
+
+.invite-item .inviter {
+    font-weight: 500;
+    color: #586069;
+}
+
+.invite-actions {
+    display: flex;
+    gap: 8px;
+    margin-left: 15px;
+}
+
+.invite-actions button {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.accept-button {
+    background-color: #2ecc71;
+    color: white;
+}
+
+.accept-button:hover {
+    background-color: #27ae60;
+}
+
+.reject-button {
+    background-color: #e74c3c;
+    color: white;
+}
+
+.reject-button:hover {
+    background-color: #c0392b;
+}
+
+.error-message {
+    color: #e74c3c;
+    background-color: #fdf0ef;
+    padding: 8px 12px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    font-size: 0.9rem;
+}

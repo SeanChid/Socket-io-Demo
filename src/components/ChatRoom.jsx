@@ -52,24 +52,6 @@ export default function ChatRoom({ room, onBack }) {
             scrollToBottom();
         };
 
-        // Listen for user joined
-        const handleUserJoined = ({ userId, username }) => {
-            setMessages(prev => [...prev, {
-                type: 'system',
-                content: `${username} joined the room`,
-                created_at: new Date().toISOString()
-            }]);
-        };
-
-        // Listen for user left
-        const handleUserLeft = ({ userId, username }) => {
-            setMessages(prev => [...prev, {
-                type: 'system',
-                content: `${username} left the room`,
-                created_at: new Date().toISOString()
-            }]);
-        };
-
         // Listen for errors
         const handleError = (error) => {
             setError(error.message);
@@ -79,14 +61,10 @@ export default function ChatRoom({ room, onBack }) {
         };
 
         socket.on('new-message', handleNewMessage);
-        socket.on('user-joined', handleUserJoined);
-        socket.on('user-left', handleUserLeft);
         socket.on('error', handleError);
 
         return () => {
             socket.off('new-message', handleNewMessage);
-            socket.off('user-joined', handleUserJoined);
-            socket.off('user-left', handleUserLeft);
             socket.off('error', handleError);
             socket.emit('leave-room', room.room_id);
         };

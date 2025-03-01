@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import './styles/RoomInvites.css';
 
 function RoomInvites({ onInviteAccepted }) {
     const [invites, setInvites] = useState([]);
@@ -61,7 +62,7 @@ function RoomInvites({ onInviteAccepted }) {
                 {invites.map(invite => (
                     <div key={invite.invite_id} className="invite-item">
                         <span>
-                            Invited to join "{invite.room_name}" by {invite.inviter_username}
+                            Invited to join <span className="room-name">"{invite.room_name}"</span> by <span className="inviter">{invite.inviter_username}</span>
                         </span>
                         <div className="invite-actions">
                             <button
@@ -84,4 +85,4 @@ function RoomInvites({ onInviteAccepted }) {
     );
 }
 
-export default RoomInvites; 
+export default RoomInvites;

@@ -11,10 +11,6 @@ export default function(io, socket) {
                 return;
             }
             socket.join(`room:${roomId}`);
-            socket.to(`room:${roomId}`).emit('user-joined', { 
-                userId: socket.user.id, 
-                username: socket.user.username 
-            });
         } catch (error) {
             socket.emit('error', { message: 'Failed to join room' });
         }
@@ -23,10 +19,6 @@ export default function(io, socket) {
     // Leave room
     socket.on('leave-room', (roomId) => {
         socket.leave(`room:${roomId}`);
-        socket.to(`room:${roomId}`).emit('user-left', { 
-            userId: socket.user.id, 
-            username: socket.user.username 
-        });
     });
 
     // Join private chat

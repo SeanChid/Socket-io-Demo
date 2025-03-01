@@ -4,15 +4,15 @@ import { requireAuth } from '../middleware/auth.js';
 export default function(app) {
     app.post('/api/private-chats', requireAuth, async (req, res) => {
         try {
-            const { userId } = req.body;
-            if (!userId) {
-                return res.status(400).json({ error: 'User ID is required' });
+            const { otherUserId } = req.body;
+            if (!otherUserId) {
+                return res.status(400).json({ error: 'Other user ID is required' });
             }
 
             // Check if chat already exists
             const existingChats = await queries.getUserPrivateChats(req.session.user.id);
             const existingChat = existingChats.find(chat => 
-                chat.other_user.id === userId
+                chat.other_user.id === otherUserId
             );
 
             if (existingChat) {
@@ -20,7 +20,7 @@ export default function(app) {
             }
 
             // Create new chat
-            const chatId = await queries.createPrivateChat(req.session.user.id, userId);
+            const chatId = await queries.createPrivateChat(req.session.user.id, otherUserId);
             const updatedChats = await queries.getUserPrivateChats(req.session.user.id);
             const newChat = updatedChats.find(chat => chat.chat_id === chatId);
             

@@ -63,7 +63,8 @@ const queries = {
 
     async getUserRooms(userId) {
         const result = await pool.query(`
-            SELECT r.room_id, r.name, r.is_private, r.created_at, r.created_by,
+            SELECT 
+                r.room_id, r.name, r.is_private, r.created_at, r.created_by,
                    array_agg(json_build_object(
                        'id', u.user_id, 
                        'username', u.username, 
@@ -198,6 +199,40 @@ const queries = {
         }
     },
 
+    async getUserById(userId) {
+        const result = await pool.query(
+            'SELECT user_id as id, username FROM users WHERE user_id = $1',
+            [userId]
+        );
+        return result.rows[0];
+    },
+
+    async createRoomInvite(userId, roomId, invitedBy) {
+        const result = await pool.query(
+            'INSERT INTO group_invites (invitee_id, room_id, inviter_id) VALUES ($1, $2, $3) RETURNING invite_id',
+            [userId, roomId, invitedBy]
+        );
+        return result.rows[0];
+    },
+
+    async getRoomInvites(userId) {
+        const result = await pool.query(`
+            SELECT 
+                gi.invite_id,
+                gi.room_id,
+                cr.name as room_name,
+                u.username as invited_by_username,
+                u.user_id as invited_by_id,
+                gi.created_at
+            FROM group_invites gi
+            JOIN chat_rooms cr ON gi.room_id = cr.room_id
+            JOIN users u ON gi.inviter_id = u.user_id
+            WHERE gi.invitee_id = $1 AND gi.status = 'pending'
+            ORDER BY gi.created_at DESC
+        `, [userId]);
+        return result.rows;
+    },
+
     // Get all public rooms that the user hasn't joined
     async getAvailableRooms(userId) {
         const result = await pool.query(`
@@ -254,7 +289,7 @@ const queries = {
                 // 1. User is the creator
                 // 2. Room is public
                 // 3. User has an invitation
-                if (room.created_by !== userId && room.is_private) {
+                if (parseInt(room.created_by) !== parseInt(userId) && room.is_private) {
                     // Check for invitation
                     const inviteCheck = await client.query(
                         'SELECT 1 FROM group_invites WHERE room_id = $1 AND invitee_id = $2 AND status = \'pending\'',
@@ -279,24 +314,33 @@ const queries = {
                 );
             }
 
-            await client.query('COMMIT');
-
-            // Get room details regardless of whether we just joined or were already a member
-            const result = await pool.query(`
-                SELECT r.room_id, r.name, r.is_private, r.created_at, r.created_by,
-                       array_agg(json_build_object(
-                           'id', u.user_id, 
-                           'username', u.username, 
-                           'avatar_url', COALESCE(u.avatar_url, '')
-                       )) as members
+            // Get updated room details
+            const roomDetails = await client.query(`
+                SELECT 
+                    r.room_id, 
+                    r.name, 
+                    r.is_private, 
+                    r.created_at, 
+                    r.created_by,
+                    COALESCE(
+                        array_agg(
+                            json_build_object(
+                                'id', u.user_id, 
+                                'username', u.username, 
+                                'avatar_url', COALESCE(u.avatar_url, '')
+                            )
+                        ) FILTER (WHERE u.user_id IS NOT NULL),
+                        '{}'::json[]
+                    ) as members
                 FROM chat_rooms r
-                JOIN user_rooms ur ON r.room_id = ur.room_id
-                JOIN users u ON ur.user_id = u.user_id
+                LEFT JOIN user_rooms ur ON r.room_id = ur.room_id
+                LEFT JOIN users u ON ur.user_id = u.user_id
                 WHERE r.room_id = $1
                 GROUP BY r.room_id, r.name, r.is_private, r.created_at, r.created_by
             `, [roomId]);
 
-            return result.rows[0];
+            await client.query('COMMIT');
+            return roomDetails.rows[0];
         } catch (error) {
             await client.query('ROLLBACK');
             throw error;
