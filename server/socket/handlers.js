@@ -36,18 +36,7 @@ export default function(io, socket) {
                 return;
             }
 
-            // Leave any previous private chats
-            for (const room of socket.rooms) {
-                if (room.startsWith('private:')) {
-                    socket.leave(room);
-                }
-            }
-
-            // Join the new private chat room
-            const roomName = `private:${chatId}`;
-            socket.join(roomName);
-
-            // Emit success event
+            socket.join(`private:${chatId}`);
             socket.emit('private-chat-joined', { chatId });
         } catch (error) {
             console.error('Error joining private chat:', error);
@@ -57,12 +46,21 @@ export default function(io, socket) {
 
     // Leave private chat
     socket.on('leave-private-chat', (chatId) => {
-        const roomName = `private:${chatId}`;
-        socket.leave(roomName);
-        socket.to(roomName).emit('user-left-private-chat', { 
-            userId: socket.user.id, 
-            username: socket.user.username 
-        });
+        socket.leave(`private:${chatId}`);
+    });
+
+    // Send room invite
+    socket.on('send-room-invite', async ({ userId, roomId }) => {
+        try {
+            const room = await queries.getRoomDetails(roomId);
+            socket.to(`user:${userId}`).emit('room-invite', {
+                roomId: room.room_id,
+                roomName: room.name,
+                inviterUsername: socket.user.username
+            });
+        } catch (error) {
+            socket.emit('error', { message: 'Failed to send invite' });
+        }
     });
 
     // Send message to room
@@ -81,7 +79,25 @@ export default function(io, socket) {
             }
 
             const message = await queries.addMessage(content, socket.user.id, roomId);
-            io.to(`room:${roomId}`).emit('new-message', message);
+            const messageData = {
+                ...message,
+                roomId,
+                sender: {
+                    id: socket.user.id,
+                    username: socket.user.username
+                }
+            };
+
+            // Send to everyone in the room including sender
+            io.to(`room:${roomId}`).emit('new-message', messageData);
+
+            // Send notification to everyone not in the room
+            socket.broadcast.emit('message-notification', {
+                type: 'room',
+                roomId,
+                sender: messageData.sender,
+                content: messageData.content
+            });
         } catch (error) {
             console.error('Error sending room message:', error);
             socket.emit('error', { message: 'Failed to send message' });
@@ -96,7 +112,6 @@ export default function(io, socket) {
                 return;
             }
 
-            // Verify chat membership
             const isMember = await queries.isUserInPrivateChat(socket.user.id, chatId);
             if (!isMember) {
                 socket.emit('error', { message: 'Not a member of this chat' });
@@ -104,8 +119,25 @@ export default function(io, socket) {
             }
 
             const message = await queries.addMessage(content, socket.user.id, null, chatId);
-            const messageWithChatId = { ...message, chat_id: chatId };
-            io.to(`private:${chatId}`).emit('new-message', messageWithChatId);
+            const messageData = {
+                ...message,
+                privateChatId: chatId,
+                sender: {
+                    id: socket.user.id,
+                    username: socket.user.username
+                }
+            };
+
+            // Send to everyone in the private chat including sender
+            io.to(`private:${chatId}`).emit('new-message', messageData);
+
+            // Send notification to the other user if they're not in this chat
+            socket.broadcast.emit('message-notification', {
+                type: 'private',
+                chatId,
+                sender: messageData.sender,
+                content: messageData.content
+            });
         } catch (error) {
             console.error('Error sending private message:', error);
             socket.emit('error', { message: 'Failed to send message' });

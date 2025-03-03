@@ -22,15 +22,7 @@ export default function PrivateChat({ chat, onBack }) {
         // Join the private chat
         socket.emit('join-private-chat', chat.chat_id);
 
-        // Handle successful join
-        const handleJoinedChat = ({ chatId }) => {
-            if (chatId === chat.chat_id) {
-                setIsJoined(true);
-                loadMessages();
-            }
-        };
-
-        // Load messages after successfully joining
+        // Load messages function
         const loadMessages = async () => {
             try {
                 const response = await fetch(`/api/private-chats/${chat.chat_id}/messages`, {
@@ -51,9 +43,17 @@ export default function PrivateChat({ chat, onBack }) {
             }
         };
 
-        // Listen for new messages in this specific chat
+        // Handle successful join
+        const handleJoinedChat = ({ chatId }) => {
+            if (chatId === chat.chat_id) {
+                setIsJoined(true);
+                loadMessages();
+            }
+        };
+
+        // Listen for new messages
         const handleNewMessage = (message) => {
-            if (message.chat_id === chat.chat_id) {
+            if (message.privateChatId === chat.chat_id) {
                 setMessages(prev => [...prev, message]);
                 scrollToBottom();
             }

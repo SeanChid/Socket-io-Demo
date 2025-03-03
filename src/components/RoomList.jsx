@@ -1,20 +1,50 @@
+import { useState, useEffect } from 'react';
+import socket from '../socket';
+import useUnreadStore from '../store/unreadStore';
+import UnreadBadge from './UnreadBadge';
 import './styles/Room.css';
 
 function RoomList({ 
     rooms, 
     onRoomSelect, 
-    onCreateRoom, 
-    showCreateRoom, 
+    selectedRoom, 
     newRoomName, 
     setNewRoomName, 
-    setShowCreateRoom,
+    onCreateRoom, 
     onInviteUsers,
     currentUserId
 }) {
+    const [error, setError] = useState('');
+    const { getUnreadCount, clearUnread } = useUnreadStore();
+
+    useEffect(() => {
+        // Listen for new messages to update unread counts
+        const handleNewMessage = (message) => {
+            // Only increment if message is for a room and we're not in that room
+            if (message.roomId && (!selectedRoom || message.roomId !== selectedRoom.room_id)) {
+                useUnreadStore.getState().incrementUnread(message.roomId, true);
+            }
+        };
+
+        const handleNotification = (notification) => {
+            // Only increment if notification is for a room and we're not in that room
+            if (notification.type === 'room' && (!selectedRoom || notification.roomId !== selectedRoom.room_id)) {
+                useUnreadStore.getState().incrementUnread(notification.roomId, true);
+            }
+        };
+
+        socket.on('new-message', handleNewMessage);
+        socket.on('message-notification', handleNotification);
+
+        return () => {
+            socket.off('new-message', handleNewMessage);
+            socket.off('message-notification', handleNotification);
+        };
+    }, [selectedRoom]);
+
     const handleCreateRoom = (e) => {
         e.preventDefault();
-        if (!newRoomName.trim()) return;
-        onCreateRoom(newRoomName.trim());
+        onCreateRoom();
     };
 
     const handleInviteClick = (e, room) => {
@@ -22,62 +52,33 @@ function RoomList({
         onInviteUsers(room);
     };
 
+    const handleRoomClick = (room) => {
+        clearUnread(room.room_id, true);
+        onRoomSelect(room);
+    };
+
+    if (error) {
+        return <div className="error-message">{error}</div>;
+    }
+
     return (
         <div className="rooms-section">
             <div className="section-header">
-                <h2>Chat Rooms</h2>
-                <button 
-                    className="create-button"
-                    onClick={() => setShowCreateRoom(true)}
-                >
-                    Create Room
-                </button>
+                <h2>Your Rooms</h2>
             </div>
-
-            {showCreateRoom && (
-                <form className="create-room-form" onSubmit={handleCreateRoom}>
-                    <input
-                        type="text"
-                        className="room-name-input"
-                        value={newRoomName}
-                        onChange={(e) => setNewRoomName(e.target.value)}
-                        placeholder="Enter room name"
-                        required
-                        minLength={3}
-                        maxLength={50}
-                        pattern="[A-Za-z0-9\s\-]+"
-                        title="Room name can only contain letters, numbers, spaces, and hyphens"
-                    />
-                    <div className="form-buttons">
-                        <button type="submit" className="create-button">
-                            Create
-                        </button>
-                        <button 
-                            type="button" 
-                            className="cancel-button"
-                            onClick={() => {
-                                setShowCreateRoom(false);
-                                setNewRoomName('');
-                            }}
-                        >
-                            Cancel
-                        </button>
-                    </div>
-                </form>
-            )}
 
             <div className="room-list">
                 {rooms.length === 0 ? (
                     <div className="no-rooms">
-                        <p>No chat rooms available.</p>
+                        <p>No rooms joined yet.</p>
                         <p>Create a room to get started!</p>
                     </div>
                 ) : (
                     rooms.map(room => (
                         <div 
                             key={room.room_id} 
-                            className="room-item"
-                            onClick={() => onRoomSelect(room)}
+                            className={`room-item ${selectedRoom?.room_id === room.room_id ? 'selected' : ''}`}
+                            onClick={() => handleRoomClick(room)}
                         >
                             <div className="room-info">
                                 <span className="room-name">{room.name}</span>
@@ -85,18 +86,34 @@ function RoomList({
                                     {room.members.length} {room.members.length === 1 ? 'member' : 'members'}
                                 </span>
                             </div>
-                            {room.created_by === currentUserId && (
-                                <button
-                                    className="invite-button"
-                                    onClick={(e) => handleInviteClick(e, room)}
-                                >
-                                    Invite Users
-                                </button>
-                            )}
+                            <div className="room-actions">
+                                <UnreadBadge count={getUnreadCount(room.room_id, true)} />
+                                {room.created_by === currentUserId && (
+                                    <button onClick={(e) => {
+                                        e.stopPropagation();
+                                        onInviteUsers(room);
+                                    }}>
+                                        Invite
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     ))
                 )}
             </div>
+
+            <form className="create-room-form" onSubmit={(e) => {
+                e.preventDefault();
+                onCreateRoom();
+            }}>
+                <input
+                    type="text"
+                    value={newRoomName}
+                    onChange={(e) => setNewRoomName(e.target.value)}
+                    placeholder="New room name..."
+                />
+                <button type="submit">Create Room</button>
+            </form>
         </div>
     );
 }
