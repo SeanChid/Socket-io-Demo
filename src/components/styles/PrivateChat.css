@@ -1,7 +1,7 @@
 .private-chat {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    height: 100vh;
     background-color: #f5f5f5;
 }
 
@@ -9,34 +9,36 @@
     display: flex;
     align-items: center;
     padding: 1rem;
-    background-color: #fff;
-    border-bottom: 1px solid #e0e0e0;
+    background-color: #f8f9fa;
+    border-bottom: 1px solid #e1e1e1;
     position: sticky;
     top: 0;
     z-index: 1;
 }
 
 .back-button {
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    cursor: pointer;
     padding: 0.5rem 1rem;
-    margin-right: 1rem;
+    background: none;
+    border: 1px solid #e1e1e1;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1.2rem;
     color: #666;
+    transition: all 0.2s ease;
 }
 
 .back-button:hover {
+    background: #f0f0f0;
     color: #333;
 }
 
 .messages-container {
-    flex-grow: 1;
+    flex: 1;
     overflow-y: auto;
     padding: 1rem;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 1rem;
 }
 
 .message-group {
@@ -85,7 +87,7 @@
 
 .username {
     font-weight: 600;
-    color: #2196f3;
+    color: #2c3e50;
 }
 
 .timestamp {
@@ -100,38 +102,39 @@
 }
 
 .message-form {
+    padding: 1rem;
+    background: #f8f9fa;
+    border-top: 1px solid #e1e1e1;
     display: flex;
     gap: 0.5rem;
-    padding: 1rem;
-    background-color: #fff;
-    border-top: 1px solid #e0e0e0;
 }
 
 .message-input {
-    flex-grow: 1;
+    flex: 1;
     padding: 0.75rem;
-    border: 1px solid #e0e0e0;
-    border-radius: 4px;
-    font-size: 1rem;
+    border: 1px solid #e1e1e1;
+    border-radius: 6px;
+    font-size: 0.95rem;
 }
 
 .message-input:focus {
     outline: none;
-    border-color: #2196f3;
+    border-color: #90caf9;
 }
 
 .send-button {
     padding: 0.75rem 1.5rem;
-    background-color: #2196f3;
+    background: #1976d2;
     color: white;
     border: none;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
     font-weight: 500;
+    transition: background-color 0.2s ease;
 }
 
 .send-button:hover {
-    background-color: #1976d2;
+    background: #1565c0;
 }
 
 .error-message {
@@ -156,24 +159,42 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
+    padding: 0.5rem 0;
+    border-bottom: 2px solid #e1e1e1;
 }
 
 .section-header h2 {
     margin: 0;
-    font-size: 1.2rem;
-    color: #333;
+    font-size: 1.25rem;
+    color: #2c3e50;
+    font-weight: 600;
+}
+
+.find-users-button {
+    padding: 0.5rem 1rem;
+    background: #1976d2;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s ease;
+}
+
+.find-users-button:hover {
+    background: #1565c0;
 }
 
 .private-chat-list {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.75rem;
 }
 
 .private-chat-item {
-    padding: 0.75rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
+    padding: 1rem;
+    border: 1px solid #e1e1e1;
+    border-radius: 8px;
     cursor: pointer;
     background: white;
     position: relative;
@@ -181,33 +202,46 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 .private-chat-item:hover {
-    background-color: #f0f0f0;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    border-color: #90caf9;
 }
 
 .private-chat-item.selected {
     background-color: #e3f2fd;
     border-color: #90caf9;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .chat-info {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: 1rem;
     position: relative;
+    flex: 1;
 }
 
 .user-name {
-    font-weight: 500;
-    color: #333;
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 1rem;
 }
 
 .no-chats {
     text-align: center;
     color: #666;
-    padding: 1rem;
+    padding: 2rem;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px dashed #ccc;
+}
+
+.no-chats p {
+    margin: 0.5rem 0;
 }
 
 /* Unread badge positioning */

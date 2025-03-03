@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import socket from '../socket';
+import useUnreadStore from '../store/unreadStore';
 import { formatMessageDate, formatMessageTime, groupMessagesByDate } from '../utils/dateFormatting';
 import './styles/ChatRoom.css';
 
@@ -9,6 +10,7 @@ export default function ChatRoom({ room, onBack }) {
     const [error, setError] = useState('');
     const [isJoined, setIsJoined] = useState(false);
     const messagesEndRef = useRef(null);
+    const { clearUnread } = useUnreadStore();
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -35,6 +37,8 @@ export default function ChatRoom({ room, onBack }) {
                 const data = await response.json();
                 setMessages(data);
                 setIsJoined(true);
+                // Clear unread count when messages are loaded
+                clearUnread(room.room_id, true);
                 scrollToBottom();
             } catch (error) {
                 setError(error.message);
@@ -49,6 +53,10 @@ export default function ChatRoom({ room, onBack }) {
         // Listen for new messages
         const handleNewMessage = (message) => {
             setMessages(prev => [...prev, message]);
+            // Clear unread count when new message arrives while in room
+            if (message.roomId === room.room_id) {
+                clearUnread(room.room_id, true);
+            }
             scrollToBottom();
         };
 
@@ -68,7 +76,7 @@ export default function ChatRoom({ room, onBack }) {
             socket.off('error', handleError);
             socket.emit('leave-room', room.room_id);
         };
-    }, [room.room_id, onBack]);
+    }, [room.room_id, onBack, clearUnread]);
 
     const handleSubmit = (e) => {
         e.preventDefault();

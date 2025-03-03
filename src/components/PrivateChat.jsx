@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import socket from '../socket';
+import useUnreadStore from '../store/unreadStore';
 import { formatMessageDate, formatMessageTime, groupMessagesByDate } from '../utils/dateFormatting';
 import './styles/PrivateChat.css'
 
@@ -9,6 +10,7 @@ export default function PrivateChat({ chat, onBack }) {
     const [error, setError] = useState('');
     const [isJoined, setIsJoined] = useState(false);
     const messagesEndRef = useRef(null);
+    const { clearUnread } = useUnreadStore();
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -34,6 +36,8 @@ export default function PrivateChat({ chat, onBack }) {
                 }
                 const data = await response.json();
                 setMessages(data);
+                // Clear unread count when messages are loaded
+                clearUnread(chat.chat_id, false);
                 scrollToBottom();
             } catch (error) {
                 setError(error.message);
@@ -55,6 +59,8 @@ export default function PrivateChat({ chat, onBack }) {
         const handleNewMessage = (message) => {
             if (message.privateChatId === chat.chat_id) {
                 setMessages(prev => [...prev, message]);
+                // Clear unread count when new message arrives while in chat
+                clearUnread(chat.chat_id, false);
                 scrollToBottom();
             }
         };
@@ -77,7 +83,7 @@ export default function PrivateChat({ chat, onBack }) {
             socket.off('error', handleError);
             socket.emit('leave-private-chat', chat.chat_id);
         };
-    }, [chat.chat_id, onBack]);
+    }, [chat.chat_id, onBack, clearUnread]);
 
     const handleSubmit = (e) => {
         e.preventDefault();

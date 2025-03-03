@@ -15,21 +15,21 @@ function RoomList({
     currentUserId
 }) {
     const [error, setError] = useState('');
-    const { getUnreadCount, clearUnread } = useUnreadStore();
+    const { getUnreadCount, clearUnread, incrementUnread } = useUnreadStore();
 
     useEffect(() => {
         // Listen for new messages to update unread counts
         const handleNewMessage = (message) => {
             // Only increment if message is for a room and we're not in that room
             if (message.roomId && (!selectedRoom || message.roomId !== selectedRoom.room_id)) {
-                useUnreadStore.getState().incrementUnread(message.roomId, true);
+                incrementUnread(message.roomId, true);
             }
         };
 
         const handleNotification = (notification) => {
             // Only increment if notification is for a room and we're not in that room
             if (notification.type === 'room' && (!selectedRoom || notification.roomId !== selectedRoom.room_id)) {
-                useUnreadStore.getState().incrementUnread(notification.roomId, true);
+                incrementUnread(notification.roomId, true);
             }
         };
 
@@ -40,7 +40,7 @@ function RoomList({
             socket.off('new-message', handleNewMessage);
             socket.off('message-notification', handleNotification);
         };
-    }, [selectedRoom]);
+    }, [selectedRoom, incrementUnread]);
 
     const handleCreateRoom = (e) => {
         e.preventDefault();
@@ -53,7 +53,6 @@ function RoomList({
     };
 
     const handleRoomClick = (room) => {
-        clearUnread(room.room_id, true);
         onRoomSelect(room);
     };
 

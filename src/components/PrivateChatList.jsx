@@ -5,21 +5,21 @@ import UnreadBadge from './UnreadBadge';
 import './styles/PrivateChat.css';
 
 function PrivateChatList({ privateChats, onChatSelect, onFindUsers, selectedChat }) {
-    const { getUnreadCount, clearUnread } = useUnreadStore();
+    const { getUnreadCount, clearUnread, incrementUnread } = useUnreadStore();
 
     useEffect(() => {
         // Listen for new messages to update unread counts
         const handleNewMessage = (message) => {
             // Only increment if message is for a private chat and we're not in that chat
             if (message.privateChatId && (!selectedChat || message.privateChatId !== selectedChat.chat_id)) {
-                useUnreadStore.getState().incrementUnread(message.privateChatId, false);
+                incrementUnread(message.privateChatId, false);
             }
         };
 
         const handleNotification = (notification) => {
             // Only increment if notification is for a private chat and we're not in that chat
             if (notification.type === 'private' && (!selectedChat || notification.chatId !== selectedChat.chat_id)) {
-                useUnreadStore.getState().incrementUnread(notification.chatId, false);
+                incrementUnread(notification.chatId, false);
             }
         };
 
@@ -30,10 +30,9 @@ function PrivateChatList({ privateChats, onChatSelect, onFindUsers, selectedChat
             socket.off('new-message', handleNewMessage);
             socket.off('message-notification', handleNotification);
         };
-    }, [selectedChat]);
+    }, [selectedChat, incrementUnread]);
 
     const handleChatClick = (chat) => {
-        clearUnread(chat.chat_id, false);
         onChatSelect(chat);
     };
 

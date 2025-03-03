@@ -1,26 +1,41 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 
-const useUnreadStore = create((set) => ({
-    unreadRooms: new Map(), // roomId -> count
-    unreadChats: new Map(), // chatId -> count
-    
-    incrementUnread: (id, isRoom = true) => set((state) => {
-        const map = isRoom ? new Map(state.unreadRooms) : new Map(state.unreadChats);
-        map.set(id, (map.get(id) || 0) + 1);
-        return isRoom ? { unreadRooms: map } : { unreadChats: map };
-    }),
+const useUnreadStore = create(
+    persist(
+        (set, get) => ({
+            unreadCounts: {}, // Format: { 'room:123': 5, 'private:456': 2 }
+            
+            incrementUnread: (id, isRoom) => {
+                const key = `${isRoom ? 'room:' : 'private:'}${id}`;
+                set((state) => ({
+                    unreadCounts: {
+                        ...state.unreadCounts,
+                        [key]: (state.unreadCounts[key] || 0) + 1
+                    }
+                }));
+            },
 
-    clearUnread: (id, isRoom = true) => set((state) => {
-        const map = isRoom ? new Map(state.unreadRooms) : new Map(state.unreadChats);
-        map.delete(id);
-        return isRoom ? { unreadRooms: map } : { unreadChats: map };
-    }),
+            clearUnread: (id, isRoom) => {
+                const key = `${isRoom ? 'room:' : 'private:'}${id}`;
+                set((state) => ({
+                    unreadCounts: {
+                        ...state.unreadCounts,
+                        [key]: 0
+                    }
+                }));
+            },
 
-    getUnreadCount: (id, isRoom = true) => {
-        const state = useUnreadStore.getState();
-        const map = isRoom ? state.unreadRooms : state.unreadChats;
-        return map.get(id) || 0;
-    }
-}));
+            getUnreadCount: (id, isRoom) => {
+                const key = `${isRoom ? 'room:' : 'private:'}${id}`;
+                return get().unreadCounts[key] || 0;
+            }
+        }),
+        {
+            name: 'unread-storage',
+            getStorage: () => localStorage
+        }
+    )
+);
 
 export default useUnreadStore;

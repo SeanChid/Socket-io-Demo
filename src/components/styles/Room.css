@@ -18,12 +18,15 @@
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1rem;
+    padding: 0.5rem 0;
+    border-bottom: 2px solid #e1e1e1;
 }
 
 .section-header h2 {
     margin: 0;
-    font-size: 1.2rem;
-    color: #333;
+    font-size: 1.25rem;
+    color: #2c3e50;
+    font-weight: 600;
 }
 
 .create-room-form {
@@ -57,13 +60,13 @@
 .room-list {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.75rem;
 }
 
 .room-item {
-    padding: 0.75rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
+    padding: 1rem;
+    border: 1px solid #e1e1e1;
+    border-radius: 8px;
     cursor: pointer;
     background: white;
     position: relative;
@@ -71,63 +74,78 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
 .room-item:hover {
-    background-color: #f0f0f0;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    border-color: #90caf9;
 }
 
 .room-item.selected {
     background-color: #e3f2fd;
     border-color: #90caf9;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 .room-info {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
+    flex: 1;
 }
 
 .room-name {
-    font-weight: 500;
-    color: #333;
-    margin-right: 1rem;
+    font-weight: 600;
+    color: #2c3e50;
+    font-size: 1rem;
 }
 
 .member-count {
-    font-size: 0.8rem;
+    font-size: 0.85rem;
     color: #666;
 }
 
 .room-actions {
-    position: absolute;
-    right: 0.75rem;
-    top: 50%;
-    transform: translateY(-50%);
     display: flex;
-    gap: 0.5rem;
     align-items: center;
+    gap: 1rem;
+    margin-left: 1rem;
 }
 
 .room-actions button {
-    padding: 0.25rem 0.5rem;
-    background: none;
-    border: 1px solid #ddd;
-    border-radius: 4px;
+    padding: 0.5rem 1rem;
+    background: #fff;
+    border: 1px solid #90caf9;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 0.8rem;
-    color: #666;
+    font-size: 0.9rem;
+    color: #1976d2;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    min-width: 80px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .room-actions button:hover {
-    background-color: #f8f9fa;
-    color: #333;
+    background-color: #e3f2fd;
+    border-color: #1976d2;
 }
 
 .no-rooms {
     text-align: center;
     color: #666;
-    padding: 1rem;
+    padding: 2rem;
+    background: #fff;
+    border-radius: 8px;
+    border: 1px dashed #ccc;
+}
+
+.no-rooms p {
+    margin: 0.5rem 0;
 }
 
 .invite-button {
