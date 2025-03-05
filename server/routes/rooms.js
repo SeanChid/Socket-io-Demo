@@ -9,8 +9,8 @@ export default function(app, io) {
                 return res.status(400).json({ error: 'Room name is required' });
             }
             
-            // Create room as public by default
-            const roomId = await queries.createChatRoom(name.trim(), req.session.user.id, false);
+            // Create room as private by default for better security
+            const roomId = await queries.createChatRoom(name.trim(), req.session.user.id, true);
             const rooms = await queries.getUserRooms(req.session.user.id);
             const newRoom = rooms.find(r => r.room_id === roomId);
             
@@ -30,9 +30,46 @@ export default function(app, io) {
         }
     });
 
+    // Add endpoint to get room invites
+    app.get('/api/rooms/invites', requireAuth, async (req, res) => {
+        try {
+            const invites = await queries.getRoomInvites(req.session.user.id);
+            res.json(invites);
+        } catch (error) {
+            console.error('Get invites error:', error);
+            res.status(500).json({ error: 'Failed to get invites' });
+        }
+    });
+
     app.post('/api/rooms/:id/join', requireAuth, async (req, res) => {
         try {
-            const room = await queries.joinRoom(req.session.user.id, req.params.id);
+            // Check if user has an invite or is room creator
+            const room = await queries.getRoomDetails(req.params.id);
+            if (!room) {
+                return res.status(404).json({ error: 'Room not found' });
+            }
+
+            // Check if user is already a member
+            const isMember = await queries.isUserInRoom(req.session.user.id, req.params.id);
+            if (isMember) {
+                return res.json(room); // Already a member, just return the room
+            }
+
+            // Allow room creator to join without invite
+            if (room.created_by !== req.session.user.id) {
+                // Check for valid invite
+                const invites = await queries.getRoomInvites(req.session.user.id);
+                const hasInvite = invites.some(invite => 
+                    invite.room_id === parseInt(req.params.id) && 
+                    invite.status === 'pending'
+                );
+
+                if (!hasInvite) {
+                    return res.status(403).json({ error: 'You need an invite to join this room' });
+                }
+            }
+
+            const joinedRoom = await queries.joinRoom(req.session.user.id, req.params.id);
             
             // Notify room members about the new user
             io.to(`room:${req.params.id}`).emit('user-joined-room', {
@@ -43,7 +80,7 @@ export default function(app, io) {
                 }
             });
 
-            res.json(room);
+            res.json(joinedRoom);
         } catch (error) {
             console.error('Join room error:', error);
             res.status(400).json({ error: error.message });
@@ -94,14 +131,14 @@ export default function(app, io) {
 
     app.get('/api/rooms/:id', requireAuth, async (req, res) => {
         try {
-            const room = await queries.getRoomById(req.params.id);
+            const room = await queries.getRoomDetails(req.params.id);
             if (!room) {
                 return res.status(404).json({ error: 'Room not found' });
             }
 
-            // Check if user is a member
+            // Check if user is a member or creator
             const isMember = await queries.isUserInRoom(req.session.user.id, req.params.id);
-            if (!isMember) {
+            if (!isMember && room.created_by !== req.session.user.id) {
                 return res.status(403).json({ error: 'Not a member of this room' });
             }
 
@@ -113,9 +150,14 @@ export default function(app, io) {
 
     app.get('/api/rooms/:id/messages', requireAuth, async (req, res) => {
         try {
-            // Check if user is a member
+            // Check if user is a member or creator
+            const room = await queries.getRoomDetails(req.params.id);
+            if (!room) {
+                return res.status(404).json({ error: 'Room not found' });
+            }
+
             const isMember = await queries.isUserInRoom(req.session.user.id, req.params.id);
-            if (!isMember) {
+            if (!isMember && room.created_by !== req.session.user.id) {
                 return res.status(403).json({ error: 'Not a member of this room' });
             }
 
@@ -124,6 +166,39 @@ export default function(app, io) {
         } catch (error) {
             console.error('Get room messages error:', error);
             res.status(500).json({ error: 'Failed to get room messages' });
+        }
+    });
+
+    // Add endpoint to accept room invites
+    app.post('/api/rooms/invites/:inviteId/accept', requireAuth, async (req, res) => {
+        try {
+            const invite = await queries.respondToInvite(req.params.inviteId, 'accepted');
+            if (!invite) {
+                return res.status(404).json({ error: 'Invite not found' });
+            }
+
+            // Join the room after accepting invite
+            const room = await queries.joinRoom(req.session.user.id, invite.room_id);
+            
+            res.json(room);
+        } catch (error) {
+            console.error('Accept invite error:', error);
+            res.status(500).json({ error: 'Failed to accept invite' });
+        }
+    });
+
+    // Add endpoint to decline room invites
+    app.post('/api/rooms/invites/:inviteId/decline', requireAuth, async (req, res) => {
+        try {
+            const result = await queries.respondToInvite(req.params.inviteId, 'declined');
+            if (!result) {
+                return res.status(404).json({ error: 'Invite not found or already responded to' });
+            }
+            
+            res.json({ message: 'Invite declined successfully', invite: result });
+        } catch (error) {
+            console.error('Decline invite error:', error);
+            res.status(500).json({ error: error.message || 'Failed to decline invite' });
         }
     });
 }

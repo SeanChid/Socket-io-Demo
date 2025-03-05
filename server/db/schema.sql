@@ -63,8 +63,7 @@ CREATE TABLE group_invites (
     room_id INTEGER REFERENCES chat_rooms(room_id) ON DELETE CASCADE,
     inviter_id INTEGER REFERENCES users(user_id),
     invitee_id INTEGER REFERENCES users(user_id),
-    status VARCHAR(20) DEFAULT 'pending',
+    status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    CHECK (status IN ('pending', 'accepted', 'rejected'))
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

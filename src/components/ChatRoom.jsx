@@ -63,7 +63,7 @@ export default function ChatRoom({ room, onBack }) {
         // Listen for errors
         const handleError = (error) => {
             setError(error.message);
-            if (error.message === 'Not a member of this room') {
+            if (error.message === 'Not a member of this room' || error.message === 'You need an invite to join this room') {
                 setTimeout(() => onBack(), 2000);
             }
         };

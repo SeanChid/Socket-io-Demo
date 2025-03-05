@@ -177,8 +177,18 @@ const queries = {
         try {
             await client.query('BEGIN');
             
+            // First check if invite exists and is pending
+            const checkInvite = await client.query(
+                'SELECT * FROM group_invites WHERE invite_id = $1 AND status = \'pending\'',
+                [inviteId]
+            );
+
+            if (checkInvite.rows.length === 0) {
+                throw new Error('Invite not found or already responded to');
+            }
+
             const invite = await client.query(
-                'UPDATE group_invites SET status = $1 WHERE invite_id = $2 RETURNING *',
+                'UPDATE group_invites SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE invite_id = $2 RETURNING *',
                 [status, inviteId]
             );
 
