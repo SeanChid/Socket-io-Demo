@@ -103,7 +103,9 @@ function RoomList({
 
             <form className="create-room-form" onSubmit={(e) => {
                 e.preventDefault();
-                onCreateRoom();
+                if (newRoomName.trim()) {
+                    onCreateRoom();
+                }
             }}>
                 <input
                     type="text"
@@ -111,7 +113,7 @@ function RoomList({
                     onChange={(e) => setNewRoomName(e.target.value)}
                     placeholder="New room name..."
                 />
-                <button type="submit">Create Room</button>
+                <button type="submit" disabled={!newRoomName.trim()}>Create Room</button>
             </form>
         </div>
     );

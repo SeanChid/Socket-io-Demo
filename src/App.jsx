@@ -57,20 +57,26 @@ function MainLayout({ user, onLogout, error, onErrorDismiss }) {
         }
     };
 
-    const handleCreateRoom = async (roomName) => {
+    const handleCreateRoom = async () => {
+        if (!newRoomName.trim()) return;
+        
         try {
             const response = await fetch('/api/rooms', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: roomName, isPrivate: false }),
+                body: JSON.stringify({ name: newRoomName.trim() }),
                 credentials: 'include'
             });
 
-            if (!response.ok) throw new Error('Failed to create room');
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Failed to create room');
+            }
             
+            const newRoom = await response.json();
             setNewRoomName('');
-            setShowCreateRoom(false);
             await loadRooms();
+            navigate(`/room/${newRoom.room_id}`);
         } catch (error) {
             onErrorDismiss(error.message);
         }
