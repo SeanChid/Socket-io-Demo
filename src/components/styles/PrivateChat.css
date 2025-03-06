@@ -265,3 +265,62 @@
     align-items: center;
     justify-content: center;
 }
+
+/* Mobile Styles */
+@media (max-width: 768px) {
+    .private-chat-list {
+        padding: 12px;
+        margin: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .private-chat-header {
+        padding-bottom: 8px;
+        margin-bottom: 12px;
+    }
+
+    .private-chat-item {
+        padding: 12px;
+        min-height: 44px;
+    }
+
+    .find-users-button {
+        min-height: 44px;
+        padding: 8px 16px;
+    }
+
+    .user-avatar {
+        width: 36px;
+        height: 36px;
+    }
+
+    .username {
+        font-size: 0.95rem;
+    }
+
+    .message-form {
+        position: sticky;
+        bottom: 0;
+        padding: 12px;
+        background: white;
+    }
+
+    .message-input {
+        font-size: 16px;
+        padding: 12px;
+        min-height: 44px;
+    }
+
+    .send-button {
+        min-height: 44px;
+        padding: 0 20px;
+    }
+
+    /* Add safe area padding for modern mobile browsers */
+    @supports (padding: max(0px)) {
+        .message-form {
+            padding-bottom: max(12px, env(safe-area-inset-bottom));
+        }
+    }
+}

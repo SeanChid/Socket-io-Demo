@@ -801,3 +801,51 @@ button[type="submit"]:hover {
   font-weight: 500;
   margin-bottom: 0.5rem;
 }
+
+/* Mobile Styles */
+@media (max-width: 768px) {
+    .app-container {
+        padding: 0.5rem;
+    }
+
+    .main-content {
+        grid-template-columns: 1fr;
+    }
+
+    .private-chat-list {
+        margin: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .rooms-section {
+        margin: 0;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    /* Improve touch targets */
+    .room-item,
+    .private-chat-item,
+    .message-input,
+    .send-button,
+    .find-users-button,
+    .create-room-button {
+        padding: 12px;
+        min-height: 44px;
+    }
+
+    /* Prevent zoom on inputs */
+    input[type="text"],
+    textarea {
+        font-size: 16px;
+    }
+
+    /* Add safe area padding for modern mobile browsers */
+    @supports (padding: max(0px)) {
+        .app-container {
+            padding-top: max(0.5rem, env(safe-area-inset-top));
+            padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+        }
+    }
+}

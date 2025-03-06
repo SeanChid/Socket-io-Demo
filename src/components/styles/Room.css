@@ -228,3 +228,38 @@
   margin-bottom: 0.25rem;
   font-size: 0.9rem;
 }
+
+/* Mobile Styles */
+@media (max-width: 768px) {
+    .rooms-section {
+        padding: 12px;
+        border-right: none;
+        border-bottom: 1px solid #e1e1e1;
+    }
+
+    .room-list {
+        gap: 8px;
+    }
+
+    .room-item {
+        padding: 12px;
+        min-height: 44px;
+    }
+
+    .room-actions button {
+        min-height: 44px;
+        padding: 8px 16px;
+        min-width: 44px;
+    }
+
+    .create-room-form input {
+        font-size: 16px;
+        padding: 12px;
+        min-height: 44px;
+    }
+
+    .create-room-form button {
+        min-height: 44px;
+        padding: 8px 16px;
+    }
+}
