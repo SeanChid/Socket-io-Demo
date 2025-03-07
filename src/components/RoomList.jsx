@@ -2,20 +2,27 @@ import { useState, useEffect } from 'react';
 import socket from '../socket';
 import useUnreadStore from '../store/unreadStore';
 import UnreadBadge from './UnreadBadge';
+import CreateRoomModal from './CreateRoomModal';
 import './styles/Room.css';
 
-function RoomList({ 
+export default function RoomList({ 
     rooms, 
-    onRoomSelect, 
+    onRoomSelect,
     selectedRoom, 
-    newRoomName, 
-    setNewRoomName, 
-    onCreateRoom, 
+    onCreateRoom,
     onInviteUsers,
-    currentUserId
+    currentUserId 
 }) {
     const [error, setError] = useState('');
-    const { getUnreadCount, clearUnread, incrementUnread } = useUnreadStore();
+    const [showCreateRoom, setShowCreateRoom] = useState(false);
+    const { getUnreadCount, incrementUnread, clearUnread } = useUnreadStore();
+
+    useEffect(() => {
+        // Clear unread count when room is selected
+        if (selectedRoom) {
+            clearUnread(selectedRoom.room_id, true);
+        }
+    }, [selectedRoom, clearUnread]);
 
     useEffect(() => {
         // Listen for new messages to update unread counts
@@ -26,97 +33,81 @@ function RoomList({
             }
         };
 
-        const handleNotification = (notification) => {
-            // Only increment if notification is for a room and we're not in that room
-            if (notification.type === 'room' && (!selectedRoom || notification.roomId !== selectedRoom.room_id)) {
-                incrementUnread(notification.roomId, true);
-            }
-        };
-
         socket.on('new-message', handleNewMessage);
-        socket.on('message-notification', handleNotification);
 
         return () => {
             socket.off('new-message', handleNewMessage);
-            socket.off('message-notification', handleNotification);
         };
     }, [selectedRoom, incrementUnread]);
 
-    const handleCreateRoom = (e) => {
-        e.preventDefault();
-        onCreateRoom();
+    const handleCreateRoom = async (roomName) => {
+        try {
+            await onCreateRoom(roomName);
+            setShowCreateRoom(false);
+        } catch (error) {
+            setError(error.message);
+        }
     };
 
     const handleInviteClick = (e, room) => {
-        e.stopPropagation(); // Prevent room selection when clicking invite
+        e.stopPropagation();
         onInviteUsers(room);
     };
-
-    const handleRoomClick = (room) => {
-        onRoomSelect(room);
-    };
-
-    if (error) {
-        return <div className="error-message">{error}</div>;
-    }
 
     return (
         <div className="rooms-section">
             <div className="section-header">
-                <h2>Your Rooms</h2>
+                <h2>Chat Rooms</h2>
+                <button 
+                    className="create-room-button"
+                    onClick={() => setShowCreateRoom(true)}
+                >
+                    Create Room
+                </button>
             </div>
 
+            {error && <div className="error-message">{error}</div>}
+
             <div className="room-list">
-                {rooms.length === 0 ? (
-                    <div className="no-rooms">
-                        <p>No rooms joined yet.</p>
-                        <p>Create a room to get started!</p>
-                    </div>
-                ) : (
-                    rooms.map(room => (
-                        <div 
-                            key={room.room_id} 
-                            className={`room-item ${selectedRoom?.room_id === room.room_id ? 'selected' : ''}`}
-                            onClick={() => handleRoomClick(room)}
-                        >
-                            <div className="room-info">
-                                <span className="room-name">{room.name}</span>
-                                <span className="member-count">
-                                    {room.members.length} {room.members.length === 1 ? 'member' : 'members'}
-                                </span>
-                            </div>
-                            <div className="room-actions">
+                {rooms.map(room => (
+                    <div 
+                        key={room.room_id} 
+                        className={`room-item ${selectedRoom?.room_id === room.room_id ? 'selected' : ''}`}
+                    >
+                        <div className="room-info" onClick={() => onRoomSelect(room)}>
+                            <div className="room-name">
+                                {room.name}
                                 <UnreadBadge count={getUnreadCount(room.room_id, true)} />
-                                {room.created_by === currentUserId && (
-                                    <button onClick={(e) => {
-                                        e.stopPropagation();
-                                        onInviteUsers(room);
-                                    }}>
-                                        Invite
-                                    </button>
-                                )}
+                            </div>
+                            <div className="room-members">
+                                {room.members.length} member{room.members.length !== 1 ? 's' : ''}
                             </div>
                         </div>
-                    ))
+                        {room.created_by === currentUserId && (
+                            <div className="room-actions">
+                                <button 
+                                    onClick={(e) => handleInviteClick(e, room)}
+                                    className="invite-button"
+                                >
+                                    Invite
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                ))}
+                {rooms.length === 0 && (
+                    <div className="no-rooms">
+                        <p>No rooms available</p>
+                        <p>Create a new room to get started!</p>
+                    </div>
                 )}
             </div>
 
-            <form className="create-room-form" onSubmit={(e) => {
-                e.preventDefault();
-                if (newRoomName.trim()) {
-                    onCreateRoom();
-                }
-            }}>
-                <input
-                    type="text"
-                    value={newRoomName}
-                    onChange={(e) => setNewRoomName(e.target.value)}
-                    placeholder="New room name..."
-                />
-                <button type="submit" disabled={!newRoomName.trim()}>Create Room</button>
-            </form>
+            <CreateRoomModal 
+                isOpen={showCreateRoom}
+                onClose={() => setShowCreateRoom(false)}
+                onCreateRoom={handleCreateRoom}
+            />
         </div>
     );
 }
-
-export default RoomList;
