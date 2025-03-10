@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import socket from '../socket';
+import { useState } from 'react';
 import useUnreadStore from '../store/unreadStore';
 import UnreadBadge from './UnreadBadge';
 import CreateRoomModal from './CreateRoomModal';
@@ -15,35 +14,13 @@ export default function RoomList({
 }) {
     const [error, setError] = useState('');
     const [showCreateRoom, setShowCreateRoom] = useState(false);
-    const { getUnreadCount, incrementUnread, clearUnread } = useUnreadStore();
-
-    useEffect(() => {
-        // Clear unread count when room is selected
-        if (selectedRoom) {
-            clearUnread(selectedRoom.room_id, true);
-        }
-    }, [selectedRoom, clearUnread]);
-
-    useEffect(() => {
-        // Listen for new messages to update unread counts
-        const handleNewMessage = (message) => {
-            // Only increment if message is for a room and we're not in that room
-            if (message.roomId && (!selectedRoom || message.roomId !== selectedRoom.room_id)) {
-                incrementUnread(message.roomId, true);
-            }
-        };
-
-        socket.on('new-message', handleNewMessage);
-
-        return () => {
-            socket.off('new-message', handleNewMessage);
-        };
-    }, [selectedRoom, incrementUnread]);
+    const { getUnreadCount } = useUnreadStore();
 
     const handleCreateRoom = async (roomName) => {
         try {
             await onCreateRoom(roomName);
             setShowCreateRoom(false);
+            setError('');
         } catch (error) {
             setError(error.message);
         }
@@ -52,6 +29,12 @@ export default function RoomList({
     const handleInviteClick = (e, room) => {
         e.stopPropagation();
         onInviteUsers(room);
+    };
+
+    const handleRoomClick = (room) => {
+        // Don't trigger room selection if we're already in this room
+        if (selectedRoom?.room_id === room.room_id) return;
+        onRoomSelect(room);
     };
 
     return (
@@ -69,32 +52,36 @@ export default function RoomList({
             {error && <div className="error-message">{error}</div>}
 
             <div className="room-list">
-                {rooms.map(room => (
-                    <div 
-                        key={room.room_id} 
-                        className={`room-item ${selectedRoom?.room_id === room.room_id ? 'selected' : ''}`}
-                    >
-                        <div className="room-info" onClick={() => onRoomSelect(room)}>
-                            <div className="room-name">
-                                {room.name}
-                                <UnreadBadge count={getUnreadCount(room.room_id, true)} />
+                {rooms.map(room => {
+                    const unreadCount = getUnreadCount(room.room_id, true);
+                    return (
+                        <div 
+                            key={room.room_id} 
+                            className={`room-item ${selectedRoom?.room_id === room.room_id ? 'selected' : ''}`}
+                        >
+                            <div className="room-info" onClick={() => handleRoomClick(room)}>
+                                <div className="room-name">
+                                    {room.name}
+                                    {room.is_private && <span className="private-badge">Private</span>}
+                                    {unreadCount > 0 && <UnreadBadge count={unreadCount} />}
+                                </div>
+                                <div className="room-members">
+                                    {room.members.length} member{room.members.length !== 1 ? 's' : ''}
+                                </div>
                             </div>
-                            <div className="room-members">
-                                {room.members.length} member{room.members.length !== 1 ? 's' : ''}
-                            </div>
+                            {room.created_by === currentUserId && (
+                                <div className="room-actions">
+                                    <button 
+                                        onClick={(e) => handleInviteClick(e, room)}
+                                        className="invite-button"
+                                    >
+                                        Invite
+                                    </button>
+                                </div>
+                            )}
                         </div>
-                        {room.created_by === currentUserId && (
-                            <div className="room-actions">
-                                <button 
-                                    onClick={(e) => handleInviteClick(e, room)}
-                                    className="invite-button"
-                                >
-                                    Invite
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                ))}
+                    );
+                })}
                 {rooms.length === 0 && (
                     <div className="no-rooms">
                         <p>No rooms available</p>
@@ -105,7 +92,10 @@ export default function RoomList({
 
             <CreateRoomModal 
                 isOpen={showCreateRoom}
-                onClose={() => setShowCreateRoom(false)}
+                onClose={() => {
+                    setShowCreateRoom(false);
+                    setError('');
+                }}
                 onCreateRoom={handleCreateRoom}
             />
         </div>

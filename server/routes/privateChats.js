@@ -76,8 +76,16 @@ export default function(app) {
                 return res.status(403).json({ error: 'Not a member of this chat' });
             }
 
-            const messages = await queries.getPrivateChatMessages(chatId);
-            res.json(messages);
+            // Get messages and mark them as read
+            const messages = await queries.getPrivateChatMessages(chatId, req.session.user.id);
+
+            // Get updated unread counts
+            const unreadCounts = await queries.getUnreadCounts(req.session.user.id);
+
+            res.json({
+                messages,
+                unreadCounts
+            });
         } catch (error) {
             console.error('Get private chat messages error:', error);
             res.status(500).json({ error: 'Failed to load messages' });

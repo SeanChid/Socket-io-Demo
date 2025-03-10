@@ -9,7 +9,7 @@ export default function(app, io) {
                 return res.status(400).json({ error: 'Room name is required' });
             }
             
-            // Create room as private by default for better security
+            // Create room as private by default
             const roomId = await queries.createChatRoom(name.trim(), req.session.user.id, true);
             const rooms = await queries.getUserRooms(req.session.user.id);
             const newRoom = rooms.find(r => r.room_id === roomId);
@@ -161,11 +161,30 @@ export default function(app, io) {
                 return res.status(403).json({ error: 'Not a member of this room' });
             }
 
-            const messages = await queries.getRoomMessages(req.params.id);
-            res.json(messages);
+            // Get messages and mark them as read
+            const messages = await queries.getRoomMessages(req.params.id, req.session.user.id);
+
+            // Get updated unread counts
+            const unreadCounts = await queries.getUnreadCounts(req.session.user.id);
+
+            res.json({
+                messages,
+                unreadCounts
+            });
         } catch (error) {
             console.error('Get room messages error:', error);
             res.status(500).json({ error: 'Failed to get room messages' });
+        }
+    });
+
+    // Get unread counts for all rooms and private chats
+    app.get('/api/rooms/unread-counts', requireAuth, async (req, res) => {
+        try {
+            const unreadCounts = await queries.getUnreadCounts(req.session.user.id);
+            res.json(unreadCounts);
+        } catch (error) {
+            console.error('Error getting unread counts:', error);
+            res.status(500).json({ error: 'Failed to get unread counts' });
         }
     });
 
@@ -179,8 +198,23 @@ export default function(app, io) {
 
             // Join the room after accepting invite
             const room = await queries.joinRoom(req.session.user.id, invite.room_id);
+
+            // Get updated room list
+            const rooms = await queries.getUserRooms(req.session.user.id);
             
-            res.json(room);
+            // Notify room members about the new user
+            io.to(`room:${invite.room_id}`).emit('user-joined-room', {
+                roomId: invite.room_id,
+                user: {
+                    id: req.session.user.id,
+                    username: req.session.user.username
+                }
+            });
+
+            res.json({
+                room,
+                rooms
+            });
         } catch (error) {
             console.error('Accept invite error:', error);
             res.status(500).json({ error: 'Failed to accept invite' });

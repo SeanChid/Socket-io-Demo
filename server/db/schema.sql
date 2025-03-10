@@ -1,4 +1,5 @@
 -- Drop tables in correct order
+DROP TABLE IF EXISTS notifications CASCADE;
 DROP TABLE IF EXISTS chat_messages CASCADE;
 DROP TABLE IF EXISTS group_invites CASCADE;
 DROP TABLE IF EXISTS private_chats CASCADE;
@@ -66,4 +67,19 @@ CREATE TABLE group_invites (
     status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'declined')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Notifications table for tracking unread messages
+CREATE TABLE notifications (
+    notification_id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+    message_id INTEGER REFERENCES chat_messages(message_id) ON DELETE CASCADE,
+    room_id INTEGER REFERENCES chat_rooms(room_id) ON DELETE CASCADE,
+    private_chat_id INTEGER REFERENCES private_chats(chat_id) ON DELETE CASCADE,
+    is_read BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CHECK (
+        (room_id IS NOT NULL AND private_chat_id IS NULL) OR
+        (room_id IS NULL AND private_chat_id IS NOT NULL)
+    )
 );

@@ -122,6 +122,15 @@
     font-weight: 500;
 }
 
+.private-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    background: #e91e63;
+    color: white;
+    border-radius: 12px;
+    font-weight: 500;
+}
+
 .room-members {
     font-size: 0.9rem;
     color: #6c757d;

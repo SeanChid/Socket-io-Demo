@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, useNavigate, useParams } from 'react-router-dom'
 import './App.css'
 import socket from './socket'
+import useUnreadStore from './store/unreadStore'
 import Auth from './components/Auth'
 import ChatRoom from './components/ChatRoom'
 import PrivateChat from './components/PrivateChat'
@@ -18,16 +19,55 @@ function MainLayout({ user, onLogout, error, onErrorDismiss }) {
     const navigate = useNavigate();
     const [rooms, setRooms] = useState([]);
     const [privateChats, setPrivateChats] = useState([]);
-    const [showCreateRoom, setShowCreateRoom] = useState(false);
     const [showFindUsers, setShowFindUsers] = useState(false);
     const [showInviteUsers, setShowInviteUsers] = useState(false);
     const [activeInviteRoom, setActiveInviteRoom] = useState(null);
-    const [newRoomName, setNewRoomName] = useState('');
+    const { updateUnreadCounts } = useUnreadStore();
 
     useEffect(() => {
-        loadRooms();
-        loadPrivateChats();
+        // Load initial data
+        const loadInitialData = async () => {
+            await Promise.all([
+                loadRooms(),
+                loadPrivateChats(),
+                loadUnreadCounts()
+            ]);
+        };
+        loadInitialData();
+
+        // Set up socket event listeners
+        socket.on('unread-counts', updateUnreadCounts);
+        socket.on('new-message', handleNewMessage);
+        socket.on('connect', () => {
+            // Re-fetch unread counts when reconnecting
+            socket.emit('get-unread-counts');
+        });
+
+        return () => {
+            socket.off('unread-counts', updateUnreadCounts);
+            socket.off('new-message', handleNewMessage);
+            socket.off('connect');
+        };
     }, []);
+
+    const loadUnreadCounts = async () => {
+        try {
+            const response = await fetch('/api/rooms/unread-counts');
+            if (!response.ok) {
+                if (response.status === 401) return;
+                throw new Error('Failed to load unread counts');
+            }
+            const counts = await response.json();
+            updateUnreadCounts(counts);
+        } catch (error) {
+            console.error('Failed to load unread counts:', error);
+        }
+    };
+
+    const handleNewMessage = async (message) => {
+        // Reload unread counts when receiving new messages
+        await loadUnreadCounts();
+    };
 
     const loadRooms = async () => {
         try {
@@ -57,14 +97,12 @@ function MainLayout({ user, onLogout, error, onErrorDismiss }) {
         }
     };
 
-    const handleCreateRoom = async () => {
-        if (!newRoomName.trim()) return;
-        
+    const handleCreateRoom = async (roomName) => {
         try {
             const response = await fetch('/api/rooms', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: newRoomName.trim() }),
+                body: JSON.stringify({ name: roomName.trim() }),
                 credentials: 'include'
             });
 
@@ -74,11 +112,11 @@ function MainLayout({ user, onLogout, error, onErrorDismiss }) {
             }
             
             const newRoom = await response.json();
-            setNewRoomName('');
             await loadRooms();
             navigate(`/room/${newRoom.room_id}`);
         } catch (error) {
             onErrorDismiss(error.message);
+            throw error; // Re-throw for modal error handling
         }
     };
 
@@ -157,10 +195,6 @@ function MainLayout({ user, onLogout, error, onErrorDismiss }) {
                     rooms={rooms}
                     onRoomSelect={handleRoomSelect}
                     onCreateRoom={handleCreateRoom}
-                    showCreateRoom={showCreateRoom}
-                    newRoomName={newRoomName}
-                    setNewRoomName={setNewRoomName}
-                    setShowCreateRoom={setShowCreateRoom}
                     onInviteUsers={(room) => {
                         setActiveInviteRoom(room.room_id);
                         setShowInviteUsers(true);
@@ -171,8 +205,7 @@ function MainLayout({ user, onLogout, error, onErrorDismiss }) {
                 <PrivateChatList
                     privateChats={privateChats}
                     onChatSelect={(chat) => navigate(`/private/${chat.chat_id}`)}
-                    onFindUsers={setShowFindUsers}
-                    showFindUsers={showFindUsers}
+                    onFindUsers={() => setShowFindUsers(true)}
                 />
             </div>
 

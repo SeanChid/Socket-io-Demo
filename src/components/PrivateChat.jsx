@@ -10,7 +10,7 @@ export default function PrivateChat({ chat, onBack }) {
     const [error, setError] = useState('');
     const [isJoined, setIsJoined] = useState(false);
     const messagesEndRef = useRef(null);
-    const { clearUnread } = useUnreadStore();
+    const { updateUnreadCounts } = useUnreadStore();
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -34,10 +34,11 @@ export default function PrivateChat({ chat, onBack }) {
                     const data = await response.json();
                     throw new Error(data.error || 'Failed to load messages');
                 }
-                const data = await response.json();
-                setMessages(data);
-                // Clear unread count when messages are loaded
-                clearUnread(chat.chat_id, false);
+                const { messages, unreadCounts } = await response.json();
+                setMessages(messages);
+                setIsJoined(true);
+                // Update unread counts from server
+                updateUnreadCounts(unreadCounts);
                 scrollToBottom();
             } catch (error) {
                 setError(error.message);
@@ -47,22 +48,20 @@ export default function PrivateChat({ chat, onBack }) {
             }
         };
 
-        // Handle successful join
-        const handleJoinedChat = ({ chatId }) => {
-            if (chatId === chat.chat_id) {
-                setIsJoined(true);
-                loadMessages();
-            }
-        };
+        // Load messages immediately after joining
+        loadMessages();
 
         // Listen for new messages
         const handleNewMessage = (message) => {
             if (message.privateChatId === chat.chat_id) {
                 setMessages(prev => [...prev, message]);
-                // Clear unread count when new message arrives while in chat
-                clearUnread(chat.chat_id, false);
                 scrollToBottom();
             }
+        };
+
+        // Listen for unread count updates
+        const handleUnreadCounts = (counts) => {
+            updateUnreadCounts(counts);
         };
 
         // Listen for errors
@@ -73,17 +72,17 @@ export default function PrivateChat({ chat, onBack }) {
             }
         };
 
-        socket.on('private-chat-joined', handleJoinedChat);
         socket.on('new-message', handleNewMessage);
+        socket.on('unread-counts', handleUnreadCounts);
         socket.on('error', handleError);
 
         return () => {
-            socket.off('private-chat-joined', handleJoinedChat);
             socket.off('new-message', handleNewMessage);
+            socket.off('unread-counts', handleUnreadCounts);
             socket.off('error', handleError);
             socket.emit('leave-private-chat', chat.chat_id);
         };
-    }, [chat.chat_id, onBack, clearUnread]);
+    }, [chat.chat_id, onBack, updateUnreadCounts]);
 
     const handleSubmit = (e) => {
         e.preventDefault();

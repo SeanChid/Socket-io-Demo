@@ -4,30 +4,14 @@ import { persist } from 'zustand/middleware';
 const useUnreadStore = create(
     persist(
         (set, get) => ({
-            unreadCounts: {}, // Format: { 'room:123': 5, 'private:456': 2 }
+            unreadCounts: {}, // Format: { 'room_123': 5, 'chat_456': 2 }
             
-            incrementUnread: (id, isRoom) => {
-                const key = `${isRoom ? 'room:' : 'private:'}${id}`;
-                set((state) => ({
-                    unreadCounts: {
-                        ...state.unreadCounts,
-                        [key]: (state.unreadCounts[key] || 0) + 1
-                    }
-                }));
-            },
-
-            clearUnread: (id, isRoom) => {
-                const key = `${isRoom ? 'room:' : 'private:'}${id}`;
-                set((state) => ({
-                    unreadCounts: {
-                        ...state.unreadCounts,
-                        [key]: 0
-                    }
-                }));
+            updateUnreadCounts: (counts) => {
+                set({ unreadCounts: counts });
             },
 
             getUnreadCount: (id, isRoom) => {
-                const key = `${isRoom ? 'room:' : 'private:'}${id}`;
+                const key = isRoom ? `room_${id}` : `chat_${id}`;
                 return get().unreadCounts[key] || 0;
             }
         }),

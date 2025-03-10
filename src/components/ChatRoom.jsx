@@ -10,7 +10,7 @@ export default function ChatRoom({ room, onBack }) {
     const [error, setError] = useState('');
     const [isJoined, setIsJoined] = useState(false);
     const messagesEndRef = useRef(null);
-    const { clearUnread } = useUnreadStore();
+    const { clearUnread, updateUnreadCounts } = useUnreadStore();
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -34,11 +34,11 @@ export default function ChatRoom({ room, onBack }) {
                     const data = await response.json();
                     throw new Error(data.error || 'Failed to load messages');
                 }
-                const data = await response.json();
-                setMessages(data);
+                const { messages, unreadCounts } = await response.json();
+                setMessages(messages);
                 setIsJoined(true);
-                // Clear unread count when messages are loaded
-                clearUnread(room.room_id, true);
+                // Update unread counts from server
+                updateUnreadCounts(unreadCounts);
                 scrollToBottom();
             } catch (error) {
                 setError(error.message);
@@ -53,11 +53,12 @@ export default function ChatRoom({ room, onBack }) {
         // Listen for new messages
         const handleNewMessage = (message) => {
             setMessages(prev => [...prev, message]);
-            // Clear unread count when new message arrives while in room
-            if (message.roomId === room.room_id) {
-                clearUnread(room.room_id, true);
-            }
             scrollToBottom();
+        };
+
+        // Listen for unread count updates
+        const handleUnreadCounts = (counts) => {
+            updateUnreadCounts(counts);
         };
 
         // Listen for errors
@@ -69,14 +70,16 @@ export default function ChatRoom({ room, onBack }) {
         };
 
         socket.on('new-message', handleNewMessage);
+        socket.on('unread-counts', handleUnreadCounts);
         socket.on('error', handleError);
 
         return () => {
             socket.off('new-message', handleNewMessage);
+            socket.off('unread-counts', handleUnreadCounts);
             socket.off('error', handleError);
             socket.emit('leave-room', room.room_id);
         };
-    }, [room.room_id, onBack, clearUnread]);
+    }, [room.room_id, onBack, updateUnreadCounts]);
 
     const handleSubmit = (e) => {
         e.preventDefault();

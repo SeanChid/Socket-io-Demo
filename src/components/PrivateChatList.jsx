@@ -1,36 +1,10 @@
-import { useState, useEffect } from 'react';
-import socket from '../socket';
+import { useState } from 'react';
 import useUnreadStore from '../store/unreadStore';
 import UnreadBadge from './UnreadBadge';
 import './styles/PrivateChat.css';
 
 function PrivateChatList({ privateChats, onChatSelect, onFindUsers, selectedChat }) {
-    const { getUnreadCount, clearUnread, incrementUnread } = useUnreadStore();
-
-    useEffect(() => {
-        // Listen for new messages to update unread counts
-        const handleNewMessage = (message) => {
-            // Only increment if message is for a private chat and we're not in that chat
-            if (message.privateChatId && (!selectedChat || message.privateChatId !== selectedChat.chat_id)) {
-                incrementUnread(message.privateChatId, false);
-            }
-        };
-
-        const handleNotification = (notification) => {
-            // Only increment if notification is for a private chat and we're not in that chat
-            if (notification.type === 'private' && (!selectedChat || notification.chatId !== selectedChat.chat_id)) {
-                incrementUnread(notification.chatId, false);
-            }
-        };
-
-        socket.on('new-message', handleNewMessage);
-        socket.on('message-notification', handleNotification);
-
-        return () => {
-            socket.off('new-message', handleNewMessage);
-            socket.off('message-notification', handleNotification);
-        };
-    }, [selectedChat, incrementUnread]);
+    const { getUnreadCount } = useUnreadStore();
 
     const handleChatClick = (chat) => {
         onChatSelect(chat);
