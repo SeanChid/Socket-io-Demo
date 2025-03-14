@@ -41,12 +41,16 @@
     border-radius: 4px;
     font-size: 1rem;
     transition: all 0.2s;
+    background-color: #ffffff;
+    color: #333333;
 }
 
 .search-container input:focus {
     outline: none;
     border-color: #2196F3;
     box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+    background-color: #ffffff;
+    color: #333333;
 }
 
 .search-spinner {
@@ -80,11 +84,15 @@
     border: 1px solid #e1e1e1;
     border-radius: 4px;
     font-size: 1rem;
+    background-color: #ffffff;
+    color: #333333;
 }
 
 .modal-content input:focus {
     outline: none;
     border-color: #2196F3;
+    background-color: #ffffff;
+    color: #333333;
 }
 
 .modal-actions {
