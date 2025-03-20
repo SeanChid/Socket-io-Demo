@@ -149,7 +149,7 @@
 .private-chats-section {
     padding: 1rem;
     border-right: 1px solid #e1e1e1;
-    background: #f8f9fa;
+    background: white;
     height: 100%;
     overflow-y: auto;
 }
