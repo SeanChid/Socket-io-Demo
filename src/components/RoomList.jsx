@@ -62,7 +62,6 @@ export default function RoomList({
                             <div className="room-info" onClick={() => handleRoomClick(room)}>
                                 <div className="room-name">
                                     {room.name}
-                                    {room.is_private && <span className="private-badge">Private</span>}
                                     {unreadCount > 0 && <UnreadBadge count={unreadCount} />}
                                 </div>
                                 <div className="room-members">
